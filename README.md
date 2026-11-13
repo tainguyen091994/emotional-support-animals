@@ -1,6 +1,6 @@
-# Three Doors
+# Emotional Support Animals
 
-A showcase site for three artists: Ceralie, Julius Wren and halfsaid. The site is a walk-in museum built with Three.js. Scroll walks you down a dark corridor. Each artist has one room behind an arch, and each song hangs as a framed meme with a museum label. Direction board: `docs/three-doors_board_meme-rebuild_20261113.md`.
+A showcase site for three artists: Ceralie, Julius Wren and halfsaid. The site is a walk-in museum built with Three.js. Scroll walks you down a dark corridor. Each artist has one room behind a giant reaction meme that tears in half as you walk up. Each song hangs as a meme with TOP TEXT and BOTTOM TEXT. The repo and the Pages path still say three-doors. Direction board: `docs/three-doors_board_meme-rebuild_20261113.md`.
 
 ## Run it
 

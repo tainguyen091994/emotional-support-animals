@@ -1,4 +1,4 @@
-/* Three Doors: walk-in museum. Board: docs/three-doors_board_meme-rebuild_20261113.md */
+/* Emotional Support Animals: walk-in museum. Board: docs/three-doors_board_meme-rebuild_20261113.md */
 @font-face { font-family: 'Anton'; src: url(fonts/Anton-normal.woff2) format('woff2'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'Geist'; src: url(fonts/Geist-normal.woff2) format('woff2'); font-weight: 300 600; font-display: swap; }
 
@@ -63,7 +63,7 @@ a { color: inherit; }
 .intro.out .intro-in { opacity: 0; transform: scale(.94); }
 .intro .kicker { color: var(--text); background: rgba(11, 10, 9, .7); padding: 7px 12px; animation: rise .8s .3s var(--ease) backwards; }
 .cap { font-family: var(--meme); font-weight: 400; text-transform: uppercase; color: #fff; -webkit-text-stroke: .14em var(--stroke); paint-order: stroke fill; }
-.intro h1 { font-size: clamp(80px, 16vw, 250px); line-height: .86; letter-spacing: .01em; margin-top: 18px; text-shadow: 0 .05em 0 var(--stroke), 0 24px 70px rgba(0, 0, 0, .7); animation: stamp .5s cubic-bezier(.2, 1.5, .45, 1) 1.55s backwards; }
+.intro h1 { font-size: clamp(50px, 10.5vw, 172px); line-height: .9; max-width: 11ch; margin-inline: auto; text-wrap: balance; letter-spacing: .01em; margin-top: 18px; text-shadow: 0 .05em 0 var(--stroke), 0 24px 70px rgba(0, 0, 0, .7); animation: stamp .5s cubic-bezier(.2, 1.5, .45, 1) 1.55s backwards; }
 @keyframes stamp { from { transform: scale(2.7) rotate(-7deg); opacity: 0; } 50% { opacity: 1; } }
 .intro-cap { margin-top: 10px; font-size: clamp(28px, 3.8vw, 56px); line-height: 1; letter-spacing: .02em; animation: stamp .45s cubic-bezier(.2, 1.5, .45, 1) 2.05s backwards; }
 .intro-late { display: flex; flex-direction: column; align-items: center; animation: rise .8s 2.4s var(--ease) backwards; }
@@ -221,6 +221,8 @@ body.is-focus .hud-bottom, body.is-focus .peek, body.is-focus .now, body.is-focu
 
 /* Phone header: keep the wordmark and chips on one line */
 .mark, .chip { white-space: nowrap; }
+.mark .m-s { display: none; }
+@media (max-width: 640px) { .mark .m-l { display: none; } .mark .m-s { display: inline; } }
 @media (max-width: 420px) {
   .hud-actions { gap: 6px; }
   .chip { padding: 8px 11px; font-size: 10px; letter-spacing: .08em; }

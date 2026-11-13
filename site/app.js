@@ -1,4 +1,4 @@
-// Three Doors: a walk-in museum. Scroll walks you down a dark corridor; each artist is a room behind an arch.
+// Emotional Support Animals: a walk-in museum. Scroll walks you down a dark corridor; each artist's room opens behind a giant meme that tears in half.
 // Routes: #/ entrance, #/<artist> that artist's door, #/<artist>/<nn> one work up close.
 // Data: tracks.js (audio and preview times), stories.js (story and lyric), memes.js (thumbnails).
 import * as THREE from 'three';
@@ -35,7 +35,7 @@ const NOTES = [
   ['An AI voice sings it.', 'The voices are made with AI. A person listens to the takes and keeps one.'],
   ['The animal holds the object.', 'Each meme shows the artist’s animal with the thing the song is about. It looks calm about it.']
 ];
-const TICKER = 'PLEASE DO NOT FEED THE ARTISTS · FLASH PHOTOGRAPHY UPSETS THE CAT · ROOM 02 IS SADDER THAN IT LOOKS · THE ANIMALS ARE CALM · THE SONGS ARE NOT · KEEP YOUR VOICE DOWN · ';
+const TICKER = 'EMOTIONAL SUPPORT ANIMALS ONLY · PLEASE DO NOT FEED THE ARTISTS · FLASH PHOTOGRAPHY UPSETS THE CAT · ROOM 02 IS SADDER THAN IT LOOKS · THE ANIMALS ARE CALM · THE SONGS ARE NOT · KEEP YOUR VOICE DOWN · ';
 
 // ---------- Floor plan (metres; the camera walks toward -z) ----------
 const W = 7, HW = W / 2, H = 4.6, EYE = 1.6, FRAME_Y = 1.75;
@@ -133,7 +133,7 @@ const TOTAL = ALL.length + ARTISTS.length;
 let loaded = 0;
 $('#loadT').textContent = TOTAL;
 const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
-function tick() { loaded++; $('#loadN').textContent = Math.min(loaded, TOTAL); if (loaded >= TOTAL) ready(); }
+function tick() { loaded++; const n = $('#loadN'); if (n) n.textContent = Math.min(loaded, TOTAL); if (loaded === TOTAL) ready(); }
 function coverFit(tx, aspect) {
   const img = tx.image; if (!img || !img.width) return;
   const a = img.width / img.height;
@@ -219,95 +219,181 @@ function onWall(obj, side, z, y) {
   return obj;
 }
 
-// Museum label plaque beside each frame
+// ---------- Meme captions ----------
+// BOTTOM TEXT for each work. The song title is the TOP TEXT.
+const CAPS = {
+  'ceralie-05': 'BILL CAME TOO FAST', 'ceralie-01': 'LEFT THE DOOR UNLOCKED. FOR NO REASON.',
+  'ceralie-06': 'DOOR STAYS OPEN. DON’T ASK.', 'ceralie-07': 'THE VIEW WAS MID ANYWAY',
+  'ceralie-04': 'SHE SAID ONE WORD. CLASS IS SHOOK.',
+  'julius-06': 'NOSTALGIC FOR TODAY. ALREADY.', 'julius-08': 'STILL HERE. STILL NOT GOOD ENOUGH.',
+  'julius-11': 'NOT MY FAULT. STILL CARRYING IT.', 'julius-05': 'CAN’T AFFORD A GIFT. CAN DRIVE YOU HOME.',
+  'julius-07': 'TOOK THE SMALL PIECE. AGAIN.', 'julius-10': 'TEN YEARS. ONE PAN. WOULD REPEAT.',
+  'halfsaid-05': 'EVERYONE KNOWS EXCEPT THEM', 'halfsaid-07': 'LOVE, BUT MAKE IT SHIPPING BOXES',
+  'halfsaid-03': 'THIS IS A LOVE LETTER, TECHNICALLY', 'halfsaid-06': 'I DID NOT EAT',
+  'halfsaid-11': 'SAME FIGHT. SEASON 4.', 'halfsaid-08': 'HE NEVER ASKED. SHE WAITED ANYWAY.',
+  'halfsaid-04': 'TIRED. COMING BACK TOMORROW.', 'halfsaid-01': 'TWO BRAIN CELLS. ONE DECISION.'
+};
+const TAGLINES = { ceralie: 'SHE IS FINE. PROBABLY.', julius: 'THIS IS A DOG. TRUST US.', halfsaid: 'TWO CATS. ONE BOWL. NO NOTES.' };
+
+// Text textures drawn before the fonts arrive are drawn again once they do.
+const redraws = [];
+function liveTex(w, h, draw) {
+  const tx = canvasTex(w, h, draw);
+  const c = tx.image;
+  redraws.push(() => { const g = c.getContext('2d'); g.clearRect(0, 0, w, h); draw(g, w, h); tx.needsUpdate = true; });
+  return tx;
+}
+// Largest meme size that fits the text in maxLines lines.
+function fitMeme(g, text, maxW, size, maxLines) {
+  let ls;
+  for (; size > 18; size -= 4) {
+    g.font = `400 ${size}px ${MEME}`;
+    ls = lines(g, text, maxW);
+    if (ls.length <= maxLines && ls.every((l) => g.measureText(l).width <= maxW)) break;
+  }
+  return { size, ls };
+}
+// Classic image macro: TOP TEXT at the top, BOTTOM TEXT at the bottom.
+function macro(g, w, h, top, bottom, topSize, botSize) {
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic'; spaced(g, 1);
+  const pad = w * .05, maxW = w - pad * 2;
+  if (top) {
+    const { size, ls } = fitMeme(g, top, maxW, topSize, 2);
+    ls.forEach((l, i) => meme(g, l, w / 2, h * .035 + size * (.9 + i * 1.02), size));
+  }
+  if (bottom) {
+    const { size, ls } = fitMeme(g, bottom, maxW, botSize, 2);
+    ls.forEach((l, i) => meme(g, l, w / 2, h - h * .05 - size * 1.02 * (ls.length - 1 - i), size));
+  }
+}
+const overlayMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false });
+
+// Small sticker beside each meme: number, length, feeling
 function labelTex(t) {
-  return canvasTex(640, 380, (g, w, h) => {
-    g.fillStyle = '#ebe7de'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#5f5b53'; g.font = `500 21px ${SANS}`; spaced(g, 3);
-    g.fillText(`NO. ${t.n}  ·  ${mmss(t.dur)}`, 40, 58);
-    spaced(g, .5); g.fillStyle = '#121212'; g.font = `400 52px ${MEME}`;
-    let y = 124;
-    lines(g, t.title.toUpperCase(), w - 80).slice(0, 2).forEach((l) => { g.fillText(l, 40, y); y += 58; });
-    spaced(g, 0); g.fillStyle = '#3d3a35'; g.font = `400 24px ${SANS}`; y += 4;
-    lines(g, t.feeling || '', w - 80).slice(0, 3).forEach((l) => { g.fillText(l, 40, y); y += 32; });
-    g.fillStyle = '#5f5b53'; g.font = `500 19px ${SANS}`; spaced(g, 2);
-    g.fillText(`${t.artist.name.toUpperCase()}  ·  ${t.artist.album.toUpperCase()}`, 40, h - 34);
+  return liveTex(640, 300, (g, w, h) => {
+    g.fillStyle = '#f4f1ea'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#5f5b53'; g.font = `500 24px ${SANS}`; spaced(g, 3);
+    g.fillText(`NO. ${t.n}  ·  ${mmss(t.dur)}`, 36, 56);
+    spaced(g, 0); g.fillStyle = '#121212'; g.font = `400 30px ${SANS}`;
+    let y = 112;
+    lines(g, t.feeling || '', w - 72).slice(0, 4).forEach((l) => { g.fillText(l, 36, y); y += 40; });
   });
 }
 
+// ---------- Song memes on the walls ----------
+const KINDS = [
+  { color: 0xf4f1ea, rough: .9, metal: 0, glow: 0xffffff },   // white sticker
+  { color: 0xb8913c, rough: .35, metal: .7, glow: 0x6b5220 }, // gold
+  { color: 0x0a0909, rough: .5, metal: .1, glow: 0x2a2724 }    // black
+];
+const tapeMat = new THREE.MeshStandardMaterial({ color: 0xe9dfc6, roughness: .9, transparent: true, opacity: .82 });
+const PW = 3.0, PH = PW * 9 / 16;
 const pickables = [];
 function buildFrame(f) {
   const g = onWall(new THREE.Group(), f.side, f.z, FRAME_Y);
   g.position.x = f.side * (HW - .05);
-  const box = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.95, .06), frameBoxMat); box.position.z = .03; g.add(box);
-  const matM = new THREE.MeshStandardMaterial({ color: 0xe9e5dc, roughness: .9, emissive: 0xffffff, emissiveIntensity: .03 });
-  const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.84, 1.79), matM); mat.position.z = .061; g.add(mat);
+  const kind = KINDS[f.i % 3];
+  g.rotation.z = Math.sin(f.i * 12.9898) * .04; // a small, fixed tilt, like a sticker slapped on
+  const matM = new THREE.MeshStandardMaterial({ color: kind.color, roughness: kind.rough, metalness: kind.metal, emissive: kind.glow, emissiveIntensity: .03 });
+  const border = new THREE.Mesh(new THREE.BoxGeometry(PW + .2, PH + .2, .05), matM); border.position.z = .025; g.add(border);
   const pm = picMat();
-  const pic = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35), pm); pic.position.z = .062; g.add(pic);
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), pm); pic.position.z = .052; g.add(pic);
   loadPic(f.t.meme, f.t.artist.cover, 16 / 9, pm);
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.3, .035, .06), barMat); bar.position.set(0, 1.18, .2); g.add(bar);
+  const ot = liveTex(1280, 720, (c, w, h) => macro(c, w, h, f.t.title.toUpperCase(), CAPS[f.t.id] || '', 118, 92));
+  const over = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), overlayMat(ot)); over.position.z = .054; g.add(over);
+  if (f.i % 3 === 0) { // sticker kind gets tape on two corners
+    [[-1, 1], [1, 1]].forEach(([sx, sy]) => {
+      const tp = new THREE.Mesh(new THREE.PlaneGeometry(.55, .16), tapeMat);
+      tp.position.set(sx * (PW / 2 + .02), sy * (PH / 2 + .04), .058); tp.rotation.z = -sx * .7; g.add(tp);
+    });
+  }
   const hm = haloMat();
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), hm); halo.position.set(0, .2, .005); g.add(halo);
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 3.6), hm); halo.position.set(0, .15, .005); g.add(halo);
   const lt = labelTex(f.t);
   const lm = new THREE.MeshStandardMaterial({ map: lt, roughness: .8, emissive: 0xffffff, emissiveMap: lt, emissiveIntensity: .2 });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(.64, .38), lm); label.position.set(2.05, -.52, .012); g.add(label);
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(.6, .28), lm); label.position.set(2.1, -.62, .012); label.rotation.z = .03; g.add(label);
   scene.add(g);
   const fm = haloMat();
   const fg = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.8), fm);
   fg.rotation.x = -Math.PI / 2; fg.position.set(f.side * 2.7, .012, f.z); scene.add(fg);
-  [pic, mat].forEach((m) => { m.userData.frame = f; pickables.push(m); });
+  [pic, over, border].forEach((m) => { m.userData.frame = f; pickables.push(m); });
   Object.assign(f, { group: g, pm, matM, hm, lm, fm, glow: 0 });
 }
 frames.forEach(buildFrame);
 
-// Cross walls with an arch for each room
-function archShape() {
-  const s = new THREE.Shape();
-  s.moveTo(-HW, 0); s.lineTo(HW, 0); s.lineTo(HW, H); s.lineTo(-HW, H); s.lineTo(-HW, 0);
-  const hole = new THREE.Path();
-  hole.moveTo(-1.2, 0); hole.lineTo(-1.2, 2.0); hole.absarc(0, 2.0, 1.2, Math.PI, 0, true); hole.lineTo(1.2, 0); hole.lineTo(-1.2, 0);
-  s.holes.push(hole);
-  return s;
+// ---------- Rooms: one giant reaction meme across the corridor ----------
+// It hangs where a door would be. Walk close and it tears in half to let you in.
+const BW = 6.4, BH = 3.9, BY = 2.45;
+function halfPlane(w, h, half) {
+  const geo = new THREE.PlaneGeometry(w, h);
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * .5 + (half > 0 ? .5 : 0));
+  return geo;
 }
-const archGeo = new THREE.ExtrudeGeometry(archShape(), { depth: .35, bevelEnabled: false, curveSegments: 32 });
-const archMat = (() => { const m = wallMat(.25, .25); return m; })();
-
+// Paper with a ragged edge where it tears
+function paperHalf(half) {
+  const s = new THREE.Shape(), m = .14, x0 = -half * (BW / 4 + m), x1 = half * (BW / 4 + .06);
+  const top = BH / 2 + m, bot = -BH / 2 - m;
+  s.moveTo(x0, bot); s.lineTo(x0, top); s.lineTo(x1, top);
+  for (let i = 1, n = 22; i < n; i++) s.lineTo(x1 + half * (i % 2 ? -.07 : .03) * (1 + Math.sin(i * 7.1) * .5), top - (top - bot) * i / n);
+  s.lineTo(x1, bot); s.lineTo(x0, bot);
+  return new THREE.ShapeGeometry(s);
+}
+const paperMat = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: .95, emissive: 0xffffff, emissiveIntensity: .08, side: THREE.DoubleSide });
+const banners = [];
 function buildDoor(d) {
   const a = d.a;
-  const wall = new THREE.Mesh(archGeo, archMat); wall.position.z = d.z - .35; add(wall, true);
-  const front = d.z + .002;
-  // Title above the arch
-  const tt = canvasTex(2048, 512, (g, w, h) => {
-    g.textAlign = 'center'; g.fillStyle = '#a39c90'; g.font = `500 54px ${SANS}`; spaced(g, 22);
-    g.fillText(`ROOM ${a.no}`, w / 2, 96);
-    spaced(g, 2); g.font = `400 300px ${MEME}`;
-    meme(g, a.name.toUpperCase(), w / 2, 430, 300, '#efe9df');
+  const pm = picMat(); pm.emissiveIntensity = .5;
+  loadPic(MASCOTS[a.id] || a.cover, a.cover, BW / BH, pm);
+  const ot = liveTex(1600, 975, (c, w, h) => macro(c, w, h, `ROOM ${+a.no}: ${a.name.toUpperCase()}`, TAGLINES[a.id], 150, 120));
+  const om = overlayMat(ot);
+  const halves = [-1, 1].map((half) => {
+    const hg = new THREE.Group(); hg.position.set(half * BW / 4, BY, d.z);
+    const paper = new THREE.Mesh(paperHalf(half), paperMat); hg.add(paper);
+    const pic = new THREE.Mesh(halfPlane(BW / 2, BH, half), pm); pic.position.z = .01; hg.add(pic);
+    const over = new THREE.Mesh(halfPlane(BW / 2, BH, half), om); over.position.z = .012; hg.add(over);
+    // Two wires up to the ceiling
+    const wire = new THREE.Mesh(new THREE.BoxGeometry(.012, H - BY - BH / 2 - .14, .012), frameBoxMat);
+    wire.position.set(-half * BW / 8 * 1.6, BH / 2 + .14 + (H - BY - BH / 2 - .14) / 2, 0); hg.add(wire);
+    scene.add(hg);
+    return { hg, half, wire };
   });
-  const title = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), textMat(tt)); title.position.set(0, 3.88, front); scene.add(title);
-  // Mascot portrait, left of the arch
-  const pg = new THREE.Group(); pg.position.set(-2.35, 1.85, front);
-  const pb = new THREE.Mesh(new THREE.BoxGeometry(1.42, 1.74, .05), frameBoxMat); pb.position.z = .025; pg.add(pb);
-  const pmat = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.62), new THREE.MeshStandardMaterial({ color: 0xe9e5dc, roughness: .9, emissive: 0xffffff, emissiveIntensity: .06 })); pmat.position.z = .051; pg.add(pmat);
-  const pm = picMat(); pm.emissiveIntensity = .45;
-  const pp = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 1.32), pm); pp.position.z = .052; pg.add(pp);
-  loadPic(MASCOTS[a.id] || a.cover, a.cover, 1.06 / 1.32, pm);
-  const cap = canvasTex(512, 64, (g, w) => { g.fillStyle = '#a39c90'; g.font = `500 22px ${SANS}`; spaced(g, 5); g.textAlign = 'center'; g.fillText('THE ANIMAL', w / 2, 40); });
-  const capM = new THREE.Mesh(new THREE.PlaneGeometry(1.2, .15), textMat(cap)); capM.position.set(0, -1.0, .01); pg.add(capM);
-  scene.add(pg);
-  // Wall text, right of the arch
-  const wt = canvasTex(1024, 1400, (g, w) => {
-    g.fillStyle = '#a39c90'; g.font = `500 30px ${SANS}`; spaced(g, 8);
-    g.fillText(`ALBUM · ${a.tracks.length} WORKS`, 0, 50);
-    spaced(g, 1); g.fillStyle = '#efe9df'; g.font = `400 130px ${MEME}`; g.fillText(a.album.toUpperCase(), 0, 200);
-    spaced(g, 0); g.font = `400 46px ${SANS}`; let y = 300;
-    lines(g, a.bio, w - 40).forEach((l) => { g.fillText(l, 0, y); y += 70; });
-    y += 30; g.fillStyle = 'rgba(239,233,223,.3)'; g.fillRect(0, y, 120, 3); y += 80;
-    g.fillStyle = '#a39c90'; g.font = `400 42px ${SANS}`;
-    lines(g, a.mascot, w - 40).forEach((l) => { g.fillText(l, 0, y); y += 62; });
+  banners.push({ d, halves, p: -1 });
+
+  // Album wall text on the side wall, just inside the room
+  const side = -(plan.frames.find((f) => f.t.artist === a).side);
+  const wt = liveTex(1400, 1000, (g, w) => {
+    g.textAlign = 'left'; g.fillStyle = '#a39c90'; g.font = `500 34px ${SANS}`; spaced(g, 8);
+    g.fillText(`ROOM ${a.no}  ·  ALBUM  ·  ${a.tracks.length} WORKS`, 10, 56);
+    spaced(g, 1); const { size } = fitMeme(g, a.album.toUpperCase(), w - 40, 190, 1);
+    meme(g, a.album.toUpperCase(), 10, 70 + size, size, '#efe9df');
+    spaced(g, 0); g.fillStyle = '#efe9df'; g.font = `400 46px ${SANS}`; let y = 110 + size + 50;
+    lines(g, a.bio, w - 60).forEach((l) => { g.fillText(l, 10, y); y += 66; });
+    y += 24; g.fillStyle = '#ffd400'; g.fillRect(10, y, 90, 6); y += 70;
+    g.fillStyle = '#a39c90'; g.font = `400 40px ${SANS}`;
+    lines(g, `The animal: ${a.mascot}`, w - 60).forEach((l) => { g.fillText(l, 10, y); y += 58; });
   });
-  const wtm = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.05), textMat(wt)); wtm.position.set(2.5, 1.75, front); scene.add(wtm);
+  scene.add(onWall(new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.0), textMat(wt)), side, d.z - 2.4, 1.95));
 }
 plan.doors.forEach(buildDoor);
+// Tear: 0 while the camera is more than 3.4 m away, 1 at 0.6 m. Driven by position, so it mends when you walk back.
+function tearBanners(cz) {
+  banners.forEach((b) => {
+    const raw = clamp((b.d.z + 3.4 - cz) / 2.8, 0, 1);
+    const p = raw * raw * (3 - 2 * raw);
+    if (Math.abs(p - b.p) < 1e-4) return;
+    b.p = p;
+    b.halves.forEach(({ hg, half, wire }) => {
+      hg.visible = p < .999;
+      hg.position.x = half * (BW / 4 + p * 2.6);
+      hg.position.y = BY - p * p * 1.8;
+      hg.position.z = b.d.z + p * .25;
+      hg.rotation.z = -half * p * .55;
+      hg.rotation.y = half * p * .35;
+      wire.visible = p < .05;
+    });
+  });
+}
 
 // Giant type in the entrance hall
 function bigType(text, italic) {
@@ -509,7 +595,7 @@ function openFocus(f) {
   $('#fPrev').textContent = `← ${frames[(i - 1 + frames.length) % frames.length].t.title}`;
   $('#fNext').textContent = `${frames[(i + 1) % frames.length].t.title} →`;
   history.replaceState(null, '', `#/${a.id}/${t.n}`);
-  document.title = `${t.title} · ${a.name} · Three Doors`;
+  document.title = `${t.title} · ${a.name} · Emotional Support Animals`;
   ticks.forEach((b, id) => b.classList.toggle('on', id === t.id));
   if (Sound.enabled && audio.t !== t) { clearTimeout(autoTimer); autoTimer = setTimeout(() => { if (st.focus === f) playTrack(t); }, 600); }
   syncAudio();
@@ -521,7 +607,7 @@ function closeFocus() {
   body.classList.remove('is-focus');
   focusEl.classList.remove('on'); focusEl.hidden = true;
   history.replaceState(null, '', '#/');
-  document.title = 'Three Doors';
+  document.title = 'Emotional Support Animals';
   scrollToZ(viewZ(f));
   syncAudio();
 }
@@ -726,7 +812,8 @@ function frame() {
   // Door light: the nearest arch ahead
   let dz = null;
   plan.doors.forEach((d) => { if (d.z < camera.position.z + 2 && (dz === null || d.z > dz)) dz = d.z; });
-  if (dz !== null) doorLight.position.set(0, 2.6, dz - 2.4);
+  if (dz !== null) doorLight.position.set(0, 2.6, dz + 2.6);
+  tearBanners(camera.position.z);
 
   // Flashlight follows the cursor
   flash.position.copy(camera.position); flash.position.y -= .15;
@@ -758,6 +845,6 @@ function frame() {
 // (Textures above were drawn with fallback fonts if the fonts were slow; redraw them once they arrive.)
 Promise.all([
   document.fonts.load(`400 100px Anton`), document.fonts.load(`500 40px Geist`)
-]).catch(() => {}).finally(() => { scrollTo(0, 0); requestAnimationFrame(frame); });
+]).catch(() => {}).finally(() => { redraws.forEach((r) => r()); scrollTo(0, 0); requestAnimationFrame(frame); });
 
 window.__museum = { plan, frames, st, camera, openFocus, closeFocus, enter, scrollToZ, viewZ };

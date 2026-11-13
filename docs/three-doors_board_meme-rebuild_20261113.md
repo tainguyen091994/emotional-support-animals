@@ -1,6 +1,8 @@
-# Three Doors: direction board for the meme rebuild
+# Emotional Support Animals: direction board for the meme rebuild
 
 Date: 2026-11-13. New songs ship with meme thumbnails: one calm animal, no text, cut-out collage look. The first rebuild hung them on a light gallery wall. Tai found it too plain, so version 2 turns the site into a museum you walk through.
+
+Version 4 renames the site. "Three Doors" said nothing about the jokes, so the museum is now Emotional Support Animals (ESA in tight spaces). The repo and the Pages path still say three-doors.
 
 The point in one line: the memes hang like art in a dark museum, and a straight-faced label does the talking.
 
@@ -17,10 +19,12 @@ No logo, photo, copy or code comes from these sites. We take patterns only.
 
 ## Concept: walk-in museum
 
-- The entrance is a salon wall. All 22 memes drop onto a dark wall in mixed frames (gold, black, white sticker), tilted a few degrees, packed close like a 19th-century salon hang. Then "THREE DOORS" stamps on in meme type and the wall shakes once. When you enter, the frames fall off the wall.
+- The entrance is a salon wall. All 22 memes drop onto a dark wall in mixed frames (gold, black, white sticker), tilted a few degrees, packed close like a 19th-century salon hang. Then "EMOTIONAL SUPPORT ANIMALS" stamps on in meme type and the wall shakes once. When you enter, the frames fall off the wall.
 - Scroll moves the visitor forward down one corridor. About 110 px of scroll is one metre.
 - The entrance has giant wall type: "Sad songs," on the left, "calm animals." on the right.
-- Each artist has one room. An arch wall opens it, with "ROOM 0N" and the name above, the animal's portrait on the left and the wall text on the right.
+- Each artist has one room. A giant reaction meme hangs across the corridor in front of it: the mascot, "ROOM N: NAME" as top text and a deadpan tagline as bottom text ("SHE IS FINE. PROBABLY."). As you walk into it, the paper tears down the middle and the two halves fall away. Version 3 used arch doors here; Tai found them too polite for the meme style.
+- The album wall text sits on the side wall just inside the room, set in the same meme type.
+- Each frame is an image macro: the song title as top text and a flat bottom caption ("NOBODY ASKED. HERE IT IS ANYWAY."). Every third frame is a white sticker with tape on two corners.
 - Frames alternate left and right. The work in front of you lights up. With sound on, its preview starts after 0.7 s.
 - The cursor is a flashlight. Over a frame it turns into a yellow "Look" ring.
 - Click a frame, and the camera turns to face it. A panel shows the story, the lyric line and a play button.
