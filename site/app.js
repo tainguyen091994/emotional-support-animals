@@ -121,7 +121,12 @@ function noise(g, w, h, base, amp, n) {
     g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2);
   }
 }
-const SERIF = 'Newsreader, Georgia, serif', SANS = 'Geist, system-ui, sans-serif';
+const MEME = 'Anton, Impact, sans-serif', SANS = 'Geist, system-ui, sans-serif';
+// Meme caption: white letters with a thick black outline, like classic image macros.
+function meme(g, text, x, y, size, fill = '#ffffff') {
+  g.lineJoin = 'round'; g.miterLimit = 2; g.strokeStyle = '#050505'; g.lineWidth = size * .16;
+  g.strokeText(text, x, y); g.fillStyle = fill; g.fillText(text, x, y);
+}
 
 // ---------- Loading ----------
 const TOTAL = ALL.length + ARTISTS.length;
@@ -220,10 +225,10 @@ function labelTex(t) {
     g.fillStyle = '#ebe7de'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#5f5b53'; g.font = `500 21px ${SANS}`; spaced(g, 3);
     g.fillText(`NO. ${t.n}  ·  ${mmss(t.dur)}`, 40, 58);
-    spaced(g, 0); g.fillStyle = '#121212'; g.font = `400 50px ${SERIF}`;
-    let y = 122;
-    lines(g, t.title, w - 80).slice(0, 2).forEach((l) => { g.fillText(l, 40, y); y += 54; });
-    g.fillStyle = '#3d3a35'; g.font = `italic 400 25px ${SERIF}`; y += 6;
+    spaced(g, .5); g.fillStyle = '#121212'; g.font = `400 52px ${MEME}`;
+    let y = 124;
+    lines(g, t.title.toUpperCase(), w - 80).slice(0, 2).forEach((l) => { g.fillText(l, 40, y); y += 58; });
+    spaced(g, 0); g.fillStyle = '#3d3a35'; g.font = `400 24px ${SANS}`; y += 4;
     lines(g, t.feeling || '', w - 80).slice(0, 3).forEach((l) => { g.fillText(l, 40, y); y += 32; });
     g.fillStyle = '#5f5b53'; g.font = `500 19px ${SANS}`; spaced(g, 2);
     g.fillText(`${t.artist.name.toUpperCase()}  ·  ${t.artist.album.toUpperCase()}`, 40, h - 34);
@@ -275,8 +280,8 @@ function buildDoor(d) {
   const tt = canvasTex(2048, 512, (g, w, h) => {
     g.textAlign = 'center'; g.fillStyle = '#a39c90'; g.font = `500 54px ${SANS}`; spaced(g, 22);
     g.fillText(`ROOM ${a.no}`, w / 2, 96);
-    spaced(g, -6); g.fillStyle = '#efe9df'; g.font = `400 300px ${SERIF}`;
-    g.fillText(a.name, w / 2, 410);
+    spaced(g, 2); g.font = `400 300px ${MEME}`;
+    meme(g, a.name.toUpperCase(), w / 2, 430, 300, '#efe9df');
   });
   const title = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), textMat(tt)); title.position.set(0, 3.88, front); scene.add(title);
   // Mascot portrait, left of the arch
@@ -293,11 +298,11 @@ function buildDoor(d) {
   const wt = canvasTex(1024, 1400, (g, w) => {
     g.fillStyle = '#a39c90'; g.font = `500 30px ${SANS}`; spaced(g, 8);
     g.fillText(`ALBUM · ${a.tracks.length} WORKS`, 0, 50);
-    spaced(g, -1); g.fillStyle = '#efe9df'; g.font = `400 120px ${SERIF}`; g.fillText(a.album, 0, 190);
-    g.font = `400 52px ${SERIF}`; let y = 300;
+    spaced(g, 1); g.fillStyle = '#efe9df'; g.font = `400 130px ${MEME}`; g.fillText(a.album.toUpperCase(), 0, 200);
+    spaced(g, 0); g.font = `400 46px ${SANS}`; let y = 300;
     lines(g, a.bio, w - 40).forEach((l) => { g.fillText(l, 0, y); y += 70; });
     y += 30; g.fillStyle = 'rgba(239,233,223,.3)'; g.fillRect(0, y, 120, 3); y += 80;
-    g.fillStyle = '#a39c90'; g.font = `italic 400 46px ${SERIF}`;
+    g.fillStyle = '#a39c90'; g.font = `400 42px ${SANS}`;
     lines(g, a.mascot, w - 40).forEach((l) => { g.fillText(l, 0, y); y += 62; });
   });
   const wtm = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.05), textMat(wt)); wtm.position.set(2.5, 1.75, front); scene.add(wtm);
@@ -307,9 +312,9 @@ plan.doors.forEach(buildDoor);
 // Giant type in the entrance hall
 function bigType(text, italic) {
   return canvasTex(4096, 1024, (g, w, h) => {
-    let size = 700; g.font = `${italic ? 'italic ' : ''}400 ${size}px ${SERIF}`;
-    const m = g.measureText(text).width; if (m > w - 120) { size *= (w - 120) / m; g.font = `${italic ? 'italic ' : ''}400 ${size}px ${SERIF}`; }
-    spaced(g, -size * .03); g.fillStyle = '#efe9df'; g.fillText(text, 40, h * .74);
+    text = text.toUpperCase(); let size = 760; g.font = `400 ${size}px ${MEME}`;
+    const m = g.measureText(text).width; if (m > w - 200) { size *= (w - 200) / m; g.font = `400 ${size}px ${MEME}`; }
+    meme(g, text, 80, h * .8, size, '#efe9df');
   });
 }
 {
@@ -339,9 +344,9 @@ plan.notes.forEach((p, i) => {
   const tx = canvasTex(2048, 1100, (g, w) => {
     g.fillStyle = '#a39c90'; g.font = `500 44px ${SANS}`; spaced(g, 12);
     g.fillText(i === 0 ? 'NOTES ON THE COLLECTION · 01' : `0${i + 1}`, 0, 70);
-    spaced(g, -3); g.fillStyle = '#efe9df'; g.font = `400 150px ${SERIF}`;
-    let y = 250; lines(g, p.n[0], w - 80).forEach((l) => { g.fillText(l, 0, y); y += 160; });
-    g.fillStyle = '#c9c1b4'; g.font = `400 70px ${SERIF}`; spaced(g, 0); y += 30;
+    spaced(g, 1); g.fillStyle = '#efe9df'; g.font = `400 160px ${MEME}`;
+    let y = 250; lines(g, p.n[0].toUpperCase(), w - 80).forEach((l) => { g.fillText(l, 0, y); y += 170; });
+    g.fillStyle = '#c9c1b4'; g.font = `400 62px ${SANS}`; spaced(g, 0); y += 30;
     lines(g, p.n[1], w - 200).forEach((l) => { g.fillText(l, 0, y); y += 92; });
   });
   scene.add(onWall(new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.15), textMat(tx)), p.side, p.z, 2.0));
@@ -354,8 +359,8 @@ plan.notes.forEach((p, i) => {
   const tx = canvasTex(2048, 1024, (g, w) => {
     g.textAlign = 'center'; g.fillStyle = '#a39c90'; g.font = `500 40px ${SANS}`; spaced(g, 14);
     g.fillText('END OF THE COLLECTION', w / 2, 120);
-    spaced(g, -4); g.fillStyle = '#efe9df'; g.font = `400 170px ${SERIF}`;
-    g.fillText('Thank you for', w / 2, 340); g.font = `italic 400 170px ${SERIF}`; g.fillText('walking slowly.', w / 2, 520);
+    spaced(g, 2); g.font = `400 200px ${MEME}`;
+    meme(g, 'THANK YOU FOR', w / 2, 370, 200); meme(g, 'WALKING SLOWLY.', w / 2, 590, 200);
   });
   const t = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.6), textMat(tx)); t.position.set(0, 2.55, plan.exitZ + .01); scene.add(t);
   const sign = canvasTex(512, 160, (g, w, h) => {
@@ -621,7 +626,7 @@ function enter(withSound) {
   body.classList.remove('is-intro');
   scrollTo(0, 0);
   syncAudio();
-  setTimeout(() => { intro.hidden = true; }, 1300);
+  setTimeout(() => { intro.hidden = true; }, 1800);
   const { t, artist } = parse();
   if (t) setTimeout(() => openFocus(frameOf(t)), 900);
   else if (artist) setTimeout(() => scrollToZ(plan.doors.find((d) => d.a === artist).z + 7, true), 900);
@@ -752,7 +757,7 @@ function frame() {
 // Wait for the fonts before drawing canvas text, then build the label textures.
 // (Textures above were drawn with fallback fonts if the fonts were slow; redraw them once they arrive.)
 Promise.all([
-  document.fonts.load(`400 100px Newsreader`), document.fonts.load(`italic 400 100px Newsreader`), document.fonts.load(`500 40px Geist`)
+  document.fonts.load(`400 100px Anton`), document.fonts.load(`500 40px Geist`)
 ]).catch(() => {}).finally(() => { scrollTo(0, 0); requestAnimationFrame(frame); });
 
 window.__museum = { plan, frames, st, camera, openFocus, closeFocus, enter, scrollToZ, viewZ };

@@ -17,6 +17,7 @@ No logo, photo, copy or code comes from these sites. We take patterns only.
 
 ## Concept: walk-in museum
 
+- The entrance is a salon wall. All 22 memes drop onto a dark wall in mixed frames (gold, black, white sticker), tilted a few degrees, packed close like a 19th-century salon hang. Then "THREE DOORS" stamps on in meme type and the wall shakes once. When you enter, the frames fall off the wall.
 - Scroll moves the visitor forward down one corridor. About 110 px of scroll is one metre.
 - The entrance has giant wall type: "Sad songs," on the left, "calm animals." on the right.
 - Each artist has one room. An arch wall opens it, with "ROOM 0N" and the name above, the animal's portrait on the left and the wall text on the right.
@@ -39,7 +40,7 @@ Tone: deadpan clean. Short sentences. No exclamation marks.
 | `--ink` | `#121212` | Text on paper and on yellow |
 | `--accent` | `#ffd400` | One yellow: the play button, the cursor ring and the current tick on the floor plan |
 
-Type: Newsreader (local) for titles and wall text, Geist (local) for UI and small capitals.
+Type: Anton (local) for titles, set like a meme caption: white, upper case, black outline. Geist (local) for body text, UI and small capitals. Version 3 swapped out Newsreader because a quiet serif read too polite next to the memes.
 
 ## Interface
 

@@ -13,10 +13,9 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0b0a09">
-<link rel="preload" href="fonts/Newsreader-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/Newsreader-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Anton-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }</script>
 </head>
 <body class="is-intro">
@@ -25,18 +24,22 @@
 <div class="grain" aria-hidden="true"></div>
 <div id="track" aria-hidden="true"></div>
 
-<!-- Intro -->
+<!-- Intro: the salon wall. hero.js hangs the frames. -->
 <section class="intro" id="intro" aria-labelledby="introTitle">
+  <div class="wall" id="wall" aria-hidden="true"></div>
   <div class="intro-in">
-    <p class="kicker">Est. 2026 · Admission free</p>
-    <h1 id="introTitle"><span class="w">Three</span> <span class="w"><em>Doors</em></span></h1>
-    <p class="intro-sub">A museum of sad songs and calm animals.<br>Nineteen works in three rooms. Please do not tap the glass.</p>
-    <p class="loader" id="loader" aria-live="polite">Hanging frames <b id="loadN">0</b>/<span id="loadT">22</span></p>
-    <div class="intro-row" id="enterRow">
-      <button class="btn-y" id="enterSound" type="button">Enter with sound</button>
-      <button class="btn-ghost" id="enterQuiet" type="button">Enter quietly</button>
+    <p class="kicker">Est. 2026 · Admission free<span class="k-x"> · 22 works, all calm</span></p>
+    <h1 id="introTitle" class="cap">Three Doors</h1>
+    <p class="intro-cap cap">Sad songs. Calm animals.</p>
+    <div class="intro-late">
+      <p class="intro-sub">Nineteen songs in three rooms. Please do not tap the glass.</p>
+      <p class="loader" id="loader" aria-live="polite">Hanging frames <b id="loadN">0</b>/<span id="loadT">22</span></p>
+      <div class="intro-row" id="enterRow">
+        <button class="btn-y" id="enterSound" type="button">Enter with sound</button>
+        <button class="btn-ghost" id="enterQuiet" type="button">Enter quietly</button>
+      </div>
+      <p class="intro-foot">Headphones help. Scroll to walk. <button class="txt" type="button" data-open-list>Read the gallery guide instead</button></p>
     </div>
-    <p class="intro-foot">Headphones help. Scroll to walk. <button class="txt" type="button" data-open-list>Read the gallery guide instead</button></p>
   </div>
 </section>
 
@@ -122,6 +125,7 @@
 <script src="tracks.js?v=5"></script>
 <script src="stories.js?v=5"></script>
 <script src="memes.js?v=1"></script>
-<script type="module" src="app.js?v=3"></script>
+<script src="hero.js?v=1"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>
