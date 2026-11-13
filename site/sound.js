@@ -13,7 +13,10 @@ window.Sound = (() => {
     if (live) e.crossOrigin = 'anonymous';
     e.preload = 'auto';
     e.volume = 0;
-    return { e, an: null, fadeId: 0, url: '' };
+    const r = { e, an: null, fadeId: 0, url: '' };
+    // A failed song load (the audio is not online yet) tells the page
+    e.addEventListener('error', () => { if (r.url && cur && cur.rec === r && api.onerror) api.onerror(cur.t); });
+    return r;
   });
 
   function wire() {
@@ -54,7 +57,8 @@ window.Sound = (() => {
     else rec.e.addEventListener('loadedmetadata', () => { rec.e.currentTime = t; }, { once: true });
   }
 
-  return {
+  const api = {
+    onerror: null,
     get enabled() { return on; },
     unlock() {
       on = true;
@@ -97,6 +101,10 @@ window.Sound = (() => {
       fade(rec, 0, ms, () => rec.e.pause());
       cur = null;
     },
+    // Pause keeps the place; play(t) with the same track resumes
+    pause(ms = 400) { if (!cur) return; const rec = cur.rec; fade(rec, 0, ms, () => rec.e.pause()); },
+    paused() { return !cur || cur.rec.e.paused; },
+    time() { return cur ? cur.rec.e.currentTime : 0; },
     current() { return cur ? cur.t : null; },
     debug() { const e = cur && cur.rec.e; return { ctx: ctx && ctx.state, id: cur && cur.t.id, paused: e && e.paused, t: e && e.currentTime, vol: e && e.volume, an: !!(cur && cur.rec.an) }; },
     level() {
@@ -111,4 +119,5 @@ window.Sound = (() => {
       return (0.45 + 0.25 * Math.sin(x * 2.2) + 0.15 * Math.sin(x * 5.1 + 1)) * cur.rec.e.volume;
     }
   };
+  return api;
 })();
