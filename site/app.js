@@ -1,10 +1,17 @@
-// Three Doors: gallery wall. Routes: #/ home, #/<artist> artist page, #/<artist>/<nn> song page.
+// Three Doors: a walk-in museum. Scroll walks you down a dark corridor; each artist is a room behind an arch.
+// Routes: #/ entrance, #/<artist> that artist's door, #/<artist>/<nn> one work up close.
 // Data: tracks.js (audio and preview times), stories.js (story and lyric), memes.js (thumbnails).
+import * as THREE from 'three';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const TOUCH = matchMedia('(hover: none)').matches;
 
+// ---------- Data ----------
 const ARTISTS = [
   { id: 'ceralie', name: 'Ceralie', album: 'Out Loud', cover: 'assets/Ceralie - Out Loud.jpg',
     bio: 'Fingerpicked songs about what stays behind: a door left open for a cat, a 32-cent stamp, two bikes on the porch.',
@@ -16,165 +23,736 @@ const ARTISTS = [
     bio: 'Two voices, one couple. He raps, she sings. They fight, they grieve, and they stay anyway.',
     mascot: 'A black cat and a white cat. They share one bowl.' }
 ];
-const FEATURED = 'halfsaid-06';
-
-ARTISTS.forEach((a) => {
+ARTISTS.forEach((a, i) => {
+  a.no = String(i + 1).padStart(2, '0');
   a.tracks = TRACKS[a.id].map((t) => ({ ...t, id: `${a.id}-${t.n}`, artist: a }));
   a.tracks.forEach((t) => { Object.assign(t, STORIES[t.id]); t.meme = MEMES[t.id] || a.cover; });
 });
 const ALL = ARTISTS.flatMap((a) => a.tracks);
-const byId = (id) => ALL.find((t) => t.id === id);
-const songHref = (t) => `#/${t.artist.id}/${t.n}`;
 
-// ---------- Building blocks ----------
-const pic = (t, eager) => `<div class="pic"><img src="${esc(t.meme)}" alt="Meme for ${esc(t.title)}: placeholder cat" ${eager ? '' : 'loading="lazy"'} decoding="async"></div>`;
-const label = (t) => `<div class="label"><div class="k"><span>No. ${t.n} · ${esc(t.artist.name)}</span><span>${mmss(t.dur)}</span></div>
-  <div class="t">${esc(t.title)}</div><div class="f">${esc(t.feeling || '')}</div></div>`;
+const NOTES = [
+  ['A person writes the story.', 'Each song starts from one scene: a stamp, a pan, a pencil line on a door.'],
+  ['An AI voice sings it.', 'The voices are made with AI. A person listens to the takes and keeps one.'],
+  ['The animal holds the object.', 'Each meme shows the artist’s animal with the thing the song is about. It looks calm about it.']
+];
+const TICKER = 'PLEASE DO NOT FEED THE ARTISTS · FLASH PHOTOGRAPHY UPSETS THE CAT · ROOM 02 IS SADDER THAN IT LOOKS · THE ANIMALS ARE CALM · THE SONGS ARE NOT · KEEP YOUR VOICE DOWN · ';
 
-function card(t) {
-  return `<li class="card" data-id="${t.id}" data-artist="${t.artist.id}">
-    <a class="open" href="${songHref(t)}"><figure class="frame">${pic(t)}${label(t)}</figure></a>
-    <button class="mini" type="button" data-play="${t.id}" aria-label="Play a preview of ${esc(t.title)}"><span class="ic" aria-hidden="true"></span></button>
-  </li>`;
+// ---------- Floor plan (metres; the camera walks toward -z) ----------
+const W = 7, HW = W / 2, H = 4.6, EYE = 1.6, FRAME_Y = 1.75;
+const START = 4, BACK = 11, SPACING = 4.2, AFTER_DOOR = 6, AFTER_ROOM = 3, AHEAD = 5;
+const plan = { doors: [], frames: [] };
+{
+  let z = -14, side = -1;
+  ARTISTS.forEach((a) => {
+    plan.doors.push({ a, z });
+    z -= AFTER_DOOR;
+    a.tracks.forEach((t, i) => {
+      plan.frames.push({ t, z, side, i: plan.frames.length });
+      side = -side;
+      if (i < a.tracks.length - 1) z -= SPACING;
+    });
+    z -= AFTER_ROOM;
+  });
+  plan.notesZ = z;
+  plan.notes = NOTES.map((n, i) => ({ n, z: z - 3 - i * 4, side: i % 2 ? 1 : -1 }));
+  plan.exitZ = z - 17;
+  plan.endZ = plan.exitZ + 5;
+}
+const frames = plan.frames;
+const frameOf = (t) => frames.find((f) => f.t === t);
+const viewZ = (f) => f.z + AHEAD;
+
+// ---------- Renderer ----------
+const canvas = $('#gl');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+} catch (e) { renderer = null; }
+
+const intro = $('#intro'), body = document.body, guide = $('#guide');
+let guideReturn = null;
+history.scrollRestoration = 'manual';
+
+if (!renderer) {
+  // No WebGL: the gallery guide is the site.
+  intro.hidden = true; body.classList.remove('is-intro');
+  $('#gClose').hidden = true;
+  document.querySelectorAll('.hud-top, .hud-bottom').forEach((el) => { el.hidden = true; });
+  buildGuide(); openGuide();
+  throw new Error('WebGL not available; showing the gallery guide.');
 }
 
-// ---------- Home ----------
-const hero = byId(FEATURED);
-$('#heroFrame').innerHTML = `${pic(hero, true)}<figcaption>${label(hero)}</figcaption>`;
-$('#heroPlay').dataset.play = hero.id;
-$('#seeAll').textContent = `See all ${ALL.length} songs`;
+renderer.setPixelRatio(Math.min(devicePixelRatio, TOUCH ? 1.5 : 1.75));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+const ANISO = renderer.capabilities.getMaxAnisotropy();
 
-$('#doorList').innerHTML = ARTISTS.map((a) => `
-  <a class="door" href="#/${a.id}">
-    <div class="arch"><img src="${esc(MASCOTS[a.id] || a.cover)}" alt="${esc(a.name)}'s animal: placeholder cat" loading="lazy"></div>
-    <h3>${esc(a.name)}</h3>
-    <p class="mascot">${esc(a.mascot)}</p>
-    <p class="bio">${esc(a.bio)}</p>
-    <div class="meta"><span>${esc(a.album)}</span><span>${a.tracks.length} songs</span></div>
-  </a>`).join('');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0a09);
+scene.fog = new THREE.Fog(0x0b0a09, 7, 40);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.05, 80);
+camera.position.set(0, EYE, START + 7);
+scene.add(camera);
 
-$('#grid').innerHTML = ALL.map(card).join('');
+// ---------- Canvas textures ----------
+function canvasTex(w, h, draw, repeat) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); draw(g, w, h);
+  const tx = new THREE.CanvasTexture(c);
+  tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = ANISO;
+  if (repeat) { tx.wrapS = tx.wrapT = THREE.RepeatWrapping; }
+  return tx;
+}
+function lines(g, text, maxW) {
+  const out = []; let cur = '';
+  String(text).split(/\s+/).forEach((w) => {
+    const next = cur ? `${cur} ${w}` : w;
+    if (g.measureText(next).width > maxW && cur) { out.push(cur); cur = w; } else cur = next;
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+function spaced(g, px) { if ('letterSpacing' in g) g.letterSpacing = `${px}px`; }
+function noise(g, w, h, base, amp, n) {
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < n; i++) {
+    const v = Math.random();
+    g.fillStyle = `rgba(${v > .5 ? '255,245,230' : '0,0,0'},${Math.random() * amp})`;
+    g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+}
+const SERIF = 'Newsreader, Georgia, serif', SANS = 'Geist, system-ui, sans-serif';
 
-const chips = [{ id: 'all', name: 'All' }, ...ARTISTS];
-$('#chips').innerHTML = chips.map((c, i) => `<button type="button" data-f="${c.id}" aria-pressed="${i === 0}">${esc(c.name)}</button>`).join('');
-$('#chips').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $('#chips').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
-  const f = b.dataset.f;
-  $('#grid').querySelectorAll('.card').forEach((c) => { c.hidden = f !== 'all' && c.dataset.artist !== f; });
+// ---------- Loading ----------
+const TOTAL = ALL.length + ARTISTS.length;
+let loaded = 0;
+$('#loadT').textContent = TOTAL;
+const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
+function tick() { loaded++; $('#loadN').textContent = Math.min(loaded, TOTAL); if (loaded >= TOTAL) ready(); }
+function coverFit(tx, aspect) {
+  const img = tx.image; if (!img || !img.width) return;
+  const a = img.width / img.height;
+  tx.repeat.set(1, 1); tx.offset.set(0, 0);
+  if (a > aspect) { tx.repeat.x = aspect / a; tx.offset.x = (1 - tx.repeat.x) / 2; }
+  else { tx.repeat.y = a / aspect; tx.offset.y = (1 - tx.repeat.y) / 2; }
+}
+function loadPic(url, fallback, aspect, mat) {
+  let done = false;
+  const ok = (tx) => {
+    tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = ANISO; coverFit(tx, aspect);
+    mat.map = tx; mat.emissiveMap = tx; mat.color.set(0xffffff); mat.needsUpdate = true;
+    if (!done) { done = true; tick(); }
+  };
+  loader.load(url, ok, undefined, () => {
+    if (fallback && fallback !== url) loader.load(fallback, ok, undefined, () => { if (!done) { done = true; tick(); } });
+    else if (!done) { done = true; tick(); }
+  });
+}
+
+// ---------- Room shell ----------
+const LEN = BACK - plan.exitZ, MID = (BACK + plan.exitZ) / 2;
+const wallTex = canvasTex(512, 512, (g, w, h) => {
+  noise(g, w, h, '#1b1916', .07, 9000);
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.18)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+}, true);
+const floorTex = canvasTex(512, 512, (g, w, h) => {
+  noise(g, w, h, '#151311', .1, 14000);
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, 0, w, 2);
+  g.fillStyle = 'rgba(255,240,220,.04)'; g.fillRect(0, 2, w, 1);
+}, true);
+
+function wallMat(rx, ry) {
+  const t = wallTex.clone(); t.needsUpdate = true; t.repeat.set(rx, ry);
+  return new THREE.MeshStandardMaterial({ map: t, roughness: .92, metalness: 0 });
+}
+const solids = [];
+function add(mesh, solid) { scene.add(mesh); if (solid) solids.push(mesh); return mesh; }
+
+{
+  const fT = floorTex.clone(); fT.needsUpdate = true; fT.repeat.set(W / 4, LEN / 4);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, LEN), new THREE.MeshStandardMaterial({ map: fT, roughness: .38, metalness: .1 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, MID); add(floor, true);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, LEN), new THREE.MeshStandardMaterial({ color: 0x0d0c0b, roughness: 1 }));
+  ceil.rotation.x = Math.PI / 2; ceil.position.set(0, H, MID); add(ceil, true);
+  [-1, 1].forEach((s) => {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(LEN, H), wallMat(LEN / 4, H / 4));
+    wall.rotation.y = s < 0 ? Math.PI / 2 : -Math.PI / 2; wall.position.set(s * HW, H / 2, MID); add(wall, true);
+    // Track lights along the ceiling
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(.05, .03, LEN), new THREE.MeshBasicMaterial({ color: 0x4a4339 }));
+    strip.position.set(s * 2.3, H - .02, MID); scene.add(strip);
+    // Skirting
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(.02, .1, LEN), new THREE.MeshStandardMaterial({ color: 0x080706, roughness: .6 }));
+    skirt.position.set(s * (HW - .01), .05, MID); scene.add(skirt);
+  });
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wallMat(W / 4, H / 4));
+  back.rotation.y = Math.PI; back.position.set(0, H / 2, BACK); add(back, true);
+}
+
+// ---------- Lights ----------
+scene.add(new THREE.HemisphereLight(0xfff1e0, 0x15110d, .55));
+const flash = new THREE.SpotLight(0xffeedd, 90, 22, .36, .75, 1.6);
+const flashTarget = new THREE.Object3D(); scene.add(flashTarget); flash.target = flashTarget; scene.add(flash);
+const frameLight = new THREE.PointLight(0xffe2b8, 0, 7, 1.6); scene.add(frameLight);
+const doorLight = new THREE.PointLight(0xffc98a, 10, 14, 1.4); scene.add(doorLight);
+
+// ---------- Shared pieces ----------
+const haloTex = canvasTex(256, 256, (g, w, h) => {
+  const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+  gr.addColorStop(0, 'rgba(255,226,180,.9)'); gr.addColorStop(.45, 'rgba(255,214,160,.28)'); gr.addColorStop(1, 'rgba(255,214,160,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
+const haloMat = () => new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: .15, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+const frameBoxMat = new THREE.MeshStandardMaterial({ color: 0x0a0909, roughness: .45, metalness: .2 });
+const barMat = new THREE.MeshBasicMaterial({ color: 0xffe9c8 });
+const picMat = () => new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: .55, emissive: 0xffffff, emissiveIntensity: .16 });
+const textMat = (map, color = 0xe6dfd3) => new THREE.MeshBasicMaterial({ map, color, transparent: true, depthWrite: false });
+
+function onWall(obj, side, z, y) {
+  obj.position.set(side * (HW - .05), y, z);
+  obj.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  return obj;
+}
+
+// Museum label plaque beside each frame
+function labelTex(t) {
+  return canvasTex(640, 380, (g, w, h) => {
+    g.fillStyle = '#ebe7de'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#5f5b53'; g.font = `500 21px ${SANS}`; spaced(g, 3);
+    g.fillText(`NO. ${t.n}  ·  ${mmss(t.dur)}`, 40, 58);
+    spaced(g, 0); g.fillStyle = '#121212'; g.font = `400 50px ${SERIF}`;
+    let y = 122;
+    lines(g, t.title, w - 80).slice(0, 2).forEach((l) => { g.fillText(l, 40, y); y += 54; });
+    g.fillStyle = '#3d3a35'; g.font = `italic 400 25px ${SERIF}`; y += 6;
+    lines(g, t.feeling || '', w - 80).slice(0, 3).forEach((l) => { g.fillText(l, 40, y); y += 32; });
+    g.fillStyle = '#5f5b53'; g.font = `500 19px ${SANS}`; spaced(g, 2);
+    g.fillText(`${t.artist.name.toUpperCase()}  ·  ${t.artist.album.toUpperCase()}`, 40, h - 34);
+  });
+}
+
+const pickables = [];
+function buildFrame(f) {
+  const g = onWall(new THREE.Group(), f.side, f.z, FRAME_Y);
+  g.position.x = f.side * (HW - .05);
+  const box = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.95, .06), frameBoxMat); box.position.z = .03; g.add(box);
+  const matM = new THREE.MeshStandardMaterial({ color: 0xe9e5dc, roughness: .9, emissive: 0xffffff, emissiveIntensity: .03 });
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.84, 1.79), matM); mat.position.z = .061; g.add(mat);
+  const pm = picMat();
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35), pm); pic.position.z = .062; g.add(pic);
+  loadPic(f.t.meme, f.t.artist.cover, 16 / 9, pm);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.3, .035, .06), barMat); bar.position.set(0, 1.18, .2); g.add(bar);
+  const hm = haloMat();
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), hm); halo.position.set(0, .2, .005); g.add(halo);
+  const lt = labelTex(f.t);
+  const lm = new THREE.MeshStandardMaterial({ map: lt, roughness: .8, emissive: 0xffffff, emissiveMap: lt, emissiveIntensity: .2 });
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(.64, .38), lm); label.position.set(2.05, -.52, .012); g.add(label);
+  scene.add(g);
+  const fm = haloMat();
+  const fg = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.8), fm);
+  fg.rotation.x = -Math.PI / 2; fg.position.set(f.side * 2.7, .012, f.z); scene.add(fg);
+  [pic, mat].forEach((m) => { m.userData.frame = f; pickables.push(m); });
+  Object.assign(f, { group: g, pm, matM, hm, lm, fm, glow: 0 });
+}
+frames.forEach(buildFrame);
+
+// Cross walls with an arch for each room
+function archShape() {
+  const s = new THREE.Shape();
+  s.moveTo(-HW, 0); s.lineTo(HW, 0); s.lineTo(HW, H); s.lineTo(-HW, H); s.lineTo(-HW, 0);
+  const hole = new THREE.Path();
+  hole.moveTo(-1.2, 0); hole.lineTo(-1.2, 2.0); hole.absarc(0, 2.0, 1.2, Math.PI, 0, true); hole.lineTo(1.2, 0); hole.lineTo(-1.2, 0);
+  s.holes.push(hole);
+  return s;
+}
+const archGeo = new THREE.ExtrudeGeometry(archShape(), { depth: .35, bevelEnabled: false, curveSegments: 32 });
+const archMat = (() => { const m = wallMat(.25, .25); return m; })();
+
+function buildDoor(d) {
+  const a = d.a;
+  const wall = new THREE.Mesh(archGeo, archMat); wall.position.z = d.z - .35; add(wall, true);
+  const front = d.z + .002;
+  // Title above the arch
+  const tt = canvasTex(2048, 512, (g, w, h) => {
+    g.textAlign = 'center'; g.fillStyle = '#a39c90'; g.font = `500 54px ${SANS}`; spaced(g, 22);
+    g.fillText(`ROOM ${a.no}`, w / 2, 96);
+    spaced(g, -6); g.fillStyle = '#efe9df'; g.font = `400 300px ${SERIF}`;
+    g.fillText(a.name, w / 2, 410);
+  });
+  const title = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), textMat(tt)); title.position.set(0, 3.88, front); scene.add(title);
+  // Mascot portrait, left of the arch
+  const pg = new THREE.Group(); pg.position.set(-2.35, 1.85, front);
+  const pb = new THREE.Mesh(new THREE.BoxGeometry(1.42, 1.74, .05), frameBoxMat); pb.position.z = .025; pg.add(pb);
+  const pmat = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.62), new THREE.MeshStandardMaterial({ color: 0xe9e5dc, roughness: .9, emissive: 0xffffff, emissiveIntensity: .06 })); pmat.position.z = .051; pg.add(pmat);
+  const pm = picMat(); pm.emissiveIntensity = .45;
+  const pp = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 1.32), pm); pp.position.z = .052; pg.add(pp);
+  loadPic(MASCOTS[a.id] || a.cover, a.cover, 1.06 / 1.32, pm);
+  const cap = canvasTex(512, 64, (g, w) => { g.fillStyle = '#a39c90'; g.font = `500 22px ${SANS}`; spaced(g, 5); g.textAlign = 'center'; g.fillText('THE ANIMAL', w / 2, 40); });
+  const capM = new THREE.Mesh(new THREE.PlaneGeometry(1.2, .15), textMat(cap)); capM.position.set(0, -1.0, .01); pg.add(capM);
+  scene.add(pg);
+  // Wall text, right of the arch
+  const wt = canvasTex(1024, 1400, (g, w) => {
+    g.fillStyle = '#a39c90'; g.font = `500 30px ${SANS}`; spaced(g, 8);
+    g.fillText(`ALBUM · ${a.tracks.length} WORKS`, 0, 50);
+    spaced(g, -1); g.fillStyle = '#efe9df'; g.font = `400 120px ${SERIF}`; g.fillText(a.album, 0, 190);
+    g.font = `400 52px ${SERIF}`; let y = 300;
+    lines(g, a.bio, w - 40).forEach((l) => { g.fillText(l, 0, y); y += 70; });
+    y += 30; g.fillStyle = 'rgba(239,233,223,.3)'; g.fillRect(0, y, 120, 3); y += 80;
+    g.fillStyle = '#a39c90'; g.font = `italic 400 46px ${SERIF}`;
+    lines(g, a.mascot, w - 40).forEach((l) => { g.fillText(l, 0, y); y += 62; });
+  });
+  const wtm = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.05), textMat(wt)); wtm.position.set(2.5, 1.75, front); scene.add(wtm);
+}
+plan.doors.forEach(buildDoor);
+
+// Giant type in the entrance hall
+function bigType(text, italic) {
+  return canvasTex(4096, 1024, (g, w, h) => {
+    let size = 700; g.font = `${italic ? 'italic ' : ''}400 ${size}px ${SERIF}`;
+    const m = g.measureText(text).width; if (m > w - 120) { size *= (w - 120) / m; g.font = `${italic ? 'italic ' : ''}400 ${size}px ${SERIF}`; }
+    spaced(g, -size * .03); g.fillStyle = '#efe9df'; g.fillText(text, 40, h * .74);
+  });
+}
+{
+  const l = onWall(new THREE.Mesh(new THREE.PlaneGeometry(9.6, 2.4), textMat(bigType('Sad songs,'), 0xd9d1c4)), -1, -2.6, 2.1); scene.add(l);
+  const r = onWall(new THREE.Mesh(new THREE.PlaneGeometry(9.6, 2.4), textMat(bigType('calm animals.', true), 0xd9d1c4)), 1, -5.6, 2.1); scene.add(r);
+  // A small welcome plaque on the floor line of the first door
+  l.position.x += .01; r.position.x -= .01;
+}
+
+// Ticker band near the ceiling, on both walls
+const tickers = [];
+{
+  const c = document.createElement('canvas').getContext('2d'); c.font = `500 40px ${SANS}`; spaced(c, 10);
+  const tw = Math.ceil(c.measureText(TICKER).width);
+  const tt = canvasTex(tw, 72, (g, w, h) => { g.font = `500 40px ${SANS}`; spaced(g, 10); g.fillStyle = '#8f887c'; g.fillText(TICKER, 0, 50); }, true);
+  tt.wrapT = THREE.ClampToEdgeWrapping;
+  const tileLen = .26 * tw / 72;
+  [-1, 1].forEach((s) => {
+    const t = tt.clone(); t.needsUpdate = true; t.repeat.set(LEN / tileLen, 1);
+    const m = onWall(new THREE.Mesh(new THREE.PlaneGeometry(LEN, .26), textMat(t, 0xffffff)), s, MID, 4.22);
+    m.position.x = s * (HW - .02); scene.add(m); tickers.push({ t, s, tileLen });
+  });
+}
+
+// Notes on the collection: wall text
+plan.notes.forEach((p, i) => {
+  const tx = canvasTex(2048, 1100, (g, w) => {
+    g.fillStyle = '#a39c90'; g.font = `500 44px ${SANS}`; spaced(g, 12);
+    g.fillText(i === 0 ? 'NOTES ON THE COLLECTION · 01' : `0${i + 1}`, 0, 70);
+    spaced(g, -3); g.fillStyle = '#efe9df'; g.font = `400 150px ${SERIF}`;
+    let y = 250; lines(g, p.n[0], w - 80).forEach((l) => { g.fillText(l, 0, y); y += 160; });
+    g.fillStyle = '#c9c1b4'; g.font = `400 70px ${SERIF}`; spaced(g, 0); y += 30;
+    lines(g, p.n[1], w - 200).forEach((l) => { g.fillText(l, 0, y); y += 92; });
+  });
+  scene.add(onWall(new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.15), textMat(tx)), p.side, p.z, 2.0));
 });
 
-// Nav links scroll to a home section, even from another page
+// Exit wall
+{
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wallMat(W / 4, H / 4));
+  wall.position.set(0, H / 2, plan.exitZ); add(wall, true);
+  const tx = canvasTex(2048, 1024, (g, w) => {
+    g.textAlign = 'center'; g.fillStyle = '#a39c90'; g.font = `500 40px ${SANS}`; spaced(g, 14);
+    g.fillText('END OF THE COLLECTION', w / 2, 120);
+    spaced(g, -4); g.fillStyle = '#efe9df'; g.font = `400 170px ${SERIF}`;
+    g.fillText('Thank you for', w / 2, 340); g.font = `italic 400 170px ${SERIF}`; g.fillText('walking slowly.', w / 2, 520);
+  });
+  const t = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.6), textMat(tx)); t.position.set(0, 2.55, plan.exitZ + .01); scene.add(t);
+  const sign = canvasTex(512, 160, (g, w, h) => {
+    g.fillStyle = '#16140f'; g.fillRect(0, 0, w, h); g.textAlign = 'center'; g.fillStyle = '#efe9df'; g.font = `600 84px ${SANS}`; spaced(g, 24); g.fillText('EXIT', w / 2 + 12, 112);
+  });
+  const s = new THREE.Mesh(new THREE.BoxGeometry(.9, .28, .05), [frameBoxMat, frameBoxMat, frameBoxMat, frameBoxMat, new THREE.MeshBasicMaterial({ map: sign }), frameBoxMat]);
+  s.position.set(0, 4.1, plan.exitZ + .05); scene.add(s);
+  const el = new THREE.PointLight(0xfff0dc, 10, 9, 1.4); el.position.set(0, 3.4, plan.exitZ + 2.5); scene.add(el);
+}
+
+// ---------- Walking ----------
+const PX = 110; // scroll pixels per metre
+const DIST = START - plan.endZ;
+const track = $('#track');
+const mouse = { x: 0, y: 0, nx: 0, ny: 0, cx: innerWidth / 2, cy: innerHeight / 2, moved: false };
+const st = {
+  entered: false, focus: null, hover: null, active: null, activeW: 0,
+  vz: 0, phase: 0, shift: { x: 0, y: 0 }, fov: 55
+};
+const look = new THREE.Vector3(0, EYE, -10);
+const lookDummy = new THREE.PerspectiveCamera(); // a camera, so lookAt faces -z like the real one
+const ray = new THREE.Raycaster();
+const tmpV = new THREE.Vector3();
+const portrait = () => innerWidth / innerHeight < .8;
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  st.fov = portrait() ? 72 : 55;
+  camera.updateProjectionMatrix();
+  track.style.height = `${Math.round(DIST * PX + h)}px`;
+}
+addEventListener('resize', resize); resize();
+
+const targetZ = () => START - clamp(scrollY / PX, 0, DIST);
+const scrollToZ = (z, smooth) => scrollTo({ top: (START - z) * PX, behavior: smooth && !RM ? 'smooth' : 'auto' });
+
+addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;
+  mouse.cx = e.clientX; mouse.cy = e.clientY; mouse.moved = true;
+  mouse.nx = (e.clientX / innerWidth) * 2 - 1; mouse.ny = (e.clientY / innerHeight) * 2 - 1;
+});
+
+// ---------- HUD ----------
+const roomN = $('#roomN'), roomT = $('#roomT'), hint = $('#hint'), exitEl = $('#exit');
+const peek = $('#peek'), cursor = $('#cursor');
+let roomKey = '';
+function setRoom(z) {
+  let key = 'entrance', n = 'Entrance', t = 'Sad songs, calm animals.';
+  plan.doors.forEach((d) => { if (z <= d.z + 8) { key = d.a.id; n = `Room ${d.a.no}`; t = `${d.a.name} · ${d.a.album}`; } });
+  if (z <= plan.notesZ) { key = 'notes'; n = 'Hallway'; t = 'Notes on the collection.'; }
+  if (z <= plan.endZ + 6) { key = 'exit'; n = 'Exit'; t = 'Thank you for walking slowly.'; }
+  if (key === roomKey) return;
+  roomKey = key; roomN.textContent = n; roomT.textContent = t;
+}
+
+// Floor plan: one tick per work
+$('#map').innerHTML = ARTISTS.map((a) => `<div class="seg" data-n="${a.no}">${a.tracks.map((t) =>
+  `<button type="button" data-jump="${t.id}" aria-label="Walk to ${esc(t.title)}, ${esc(a.name)}"></button>`).join('')}</div>`).join('');
+const ticks = new Map([...document.querySelectorAll('[data-jump]')].map((b) => [b.dataset.jump, b]));
+$('#map').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-jump]'); if (!b) return;
+  const f = frames.find((x) => x.t.id === b.dataset.jump);
+  if (st.focus) openFocus(f); else scrollToZ(viewZ(f), true);
+});
+
+// ---------- Audio ----------
+const audio = { t: null, playing: false, done: false, failed: new Set() };
+const soundBtn = $('#soundBtn'), now = $('#now'), nowT = $('#nowT'), nowP = $('#nowP');
+let nowTimer = 0;
+function playTrack(t) {
+  if (!Sound.enabled) return;
+  audio.t = t; audio.playing = true; audio.done = false;
+  Sound.play(t);
+  $('#live').textContent = `Playing ${t.title} by ${t.artist.name}`;
+  syncAudio();
+}
+function pauseTrack() { Sound.pause(); audio.playing = false; syncAudio(); }
+function stopTrack(ms = 900) { Sound.stop(ms); audio.playing = false; audio.t = null; syncAudio(); }
+function toggleTrack(t) {
+  if (!Sound.enabled) { Sound.unlock(); }
+  if (audio.t === t && audio.playing) pauseTrack();
+  else { audio.failed.delete(t.id); playTrack(t); }
+}
+Sound.onerror = (t) => {
+  audio.failed.add(t.id);
+  if (audio.t && audio.t.id === t.id) audio.playing = false;
+  $('#live').textContent = 'Audio not online yet.';
+  syncAudio();
+};
+function syncAudio() {
+  const on = Sound.enabled;
+  soundBtn.setAttribute('aria-pressed', on);
+  soundBtn.querySelector('.lbl').textContent = on ? 'Sound on' : 'Sound off';
+  const t = audio.t, failed = t && audio.failed.has(t.id);
+  clearTimeout(nowTimer);
+  if (t && (audio.playing || failed)) {
+    now.hidden = false; now.classList.toggle('err', !!failed);
+    nowT.textContent = failed ? `Audio not online yet · ${t.title}` : `${t.title} · ${t.artist.name}`;
+    if (failed) nowTimer = setTimeout(() => { now.hidden = true; }, 3200);
+  } else now.hidden = true;
+  const f = st.focus;
+  const fPlaying = !!(f && audio.t === f.t && audio.playing);
+  $('#fPlay').classList.toggle('playing', fPlaying);
+  $('#fPlay .t').textContent = fPlaying ? 'Pause' : 'Play a preview';
+  $('#fErr').hidden = !(f && audio.failed.has(f.t.id));
+  document.querySelectorAll('[data-gplay]').forEach((b) => {
+    const p = audio.playing && audio.t && audio.t.id === b.dataset.gplay;
+    b.classList.toggle('playing', p); b.querySelector('.t').textContent = p ? 'Pause' : 'Play';
+  });
+}
+soundBtn.addEventListener('click', () => {
+  if (Sound.enabled) { Sound.mute(); audio.playing = false; audio.t = null; }
+  else { Sound.unlock(); const f = st.focus || st.active; if (f) playTrack(f.t); }
+  syncAudio();
+});
+
+// Auto-play the work in front of you, like an audio guide
+let autoTimer = 0;
+function onActive(f) {
+  clearTimeout(autoTimer);
+  if (f) {
+    ticks.forEach((b, id) => b.classList.toggle('on', id === f.t.id));
+    if (Sound.enabled) autoTimer = setTimeout(() => { if (st.active === f && !st.focus && audio.t !== f.t) playTrack(f.t); }, 700);
+  } else {
+    ticks.forEach((b) => b.classList.remove('on'));
+    autoTimer = setTimeout(() => { if (!st.active && !st.focus && audio.t) stopTrack(); }, 1200);
+  }
+}
+
+// ---------- Focus: one work up close ----------
+const focusEl = $('#focus');
+function openFocus(f) {
+  if (!f) return;
+  const t = f.t, a = t.artist;
+  st.focus = f;
+  body.classList.add('is-focus');
+  focusEl.hidden = false; focusEl.classList.remove('on'); void focusEl.offsetWidth; focusEl.classList.add('on');
+  $('#fKick').textContent = `Room ${a.no} · ${a.name} · No. ${t.n} · ${mmss(t.dur)}`;
+  $('#fTitle').textContent = t.title;
+  $('#fFeel').textContent = t.feeling || '';
+  $('#fStory').innerHTML = (t.story || []).map((l, i) => `<p style="animation-delay:${(.4 + i * .16).toFixed(2)}s">${esc(l)}</p>`).join('');
+  $('#fLyric').textContent = t.line || ''; $('#fLyric').hidden = !t.line;
+  const i = frames.indexOf(f);
+  $('#fPrev').textContent = `← ${frames[(i - 1 + frames.length) % frames.length].t.title}`;
+  $('#fNext').textContent = `${frames[(i + 1) % frames.length].t.title} →`;
+  history.replaceState(null, '', `#/${a.id}/${t.n}`);
+  document.title = `${t.title} · ${a.name} · Three Doors`;
+  ticks.forEach((b, id) => b.classList.toggle('on', id === t.id));
+  if (Sound.enabled && audio.t !== t) { clearTimeout(autoTimer); autoTimer = setTimeout(() => { if (st.focus === f) playTrack(t); }, 600); }
+  syncAudio();
+  setTimeout(() => $('#fClose').focus({ preventScroll: true }), 50);
+}
+function closeFocus() {
+  const f = st.focus; if (!f) return;
+  st.focus = null;
+  body.classList.remove('is-focus');
+  focusEl.classList.remove('on'); focusEl.hidden = true;
+  history.replaceState(null, '', '#/');
+  document.title = 'Three Doors';
+  scrollToZ(viewZ(f));
+  syncAudio();
+}
+const step = (d) => { const f = st.focus || st.active; const i = f ? frames.indexOf(f) : -1; return frames[clamp(i + d, 0, frames.length - 1)]; };
+$('#fPrev').addEventListener('click', () => openFocus(frames[(frames.indexOf(st.focus) - 1 + frames.length) % frames.length]));
+$('#fNext').addEventListener('click', () => openFocus(frames[(frames.indexOf(st.focus) + 1) % frames.length]));
+$('#fClose').addEventListener('click', closeFocus);
+$('#fPlay').addEventListener('click', () => st.focus && toggleTrack(st.focus.t));
+
+canvas.addEventListener('click', (e) => {
+  if (!st.entered || st.focus) return;
+  const f = pick(e.clientX, e.clientY);
+  if (f) openFocus(f);
+});
+function pick(x, y) {
+  ray.setFromCamera({ x: (x / innerWidth) * 2 - 1, y: -(y / innerHeight) * 2 + 1 }, camera);
+  const hit = ray.intersectObjects(pickables, false)[0];
+  return hit && hit.distance < 16 ? hit.object.userData.frame : null;
+}
+
+// ---------- Gallery guide ----------
+function buildGuide() {
+  $('#gRooms').innerHTML = ARTISTS.map((a) => `
+    <section class="g-room" aria-labelledby="g-${a.id}">
+      <h3 id="g-${a.id}">${esc(a.name)}</h3>
+      <p class="g-k">Room ${a.no} · ${esc(a.album)} · ${a.tracks.length} works</p>
+      <p>${esc(a.bio)} ${esc(a.mascot)}</p>
+      <ul class="g-list">${a.tracks.map((t) => `
+        <li><img src="${esc(t.meme)}" alt="Meme for ${esc(t.title)}: placeholder cat" loading="lazy">
+          <div><b>${esc(t.title)}</b><span>No. ${t.n} · ${mmss(t.dur)} · ${esc(t.feeling || '')}</span></div>
+          <div class="g-acts"><button type="button" data-gplay="${t.id}"><span class="ic" aria-hidden="true"></span><span class="t">Play</span></button>${renderer ? `<button type="button" data-show="${t.id}">Show in gallery</button>` : ''}</div></li>`).join('')}
+      </ul>
+    </section>`).join('');
+}
+function openGuide() {
+  guideReturn = document.activeElement;
+  guide.hidden = false; body.classList.add('is-guide');
+  $('#gClose').focus({ preventScroll: true });
+}
+function closeGuide() {
+  guide.hidden = true; body.classList.remove('is-guide');
+  if (guideReturn && guideReturn.focus) guideReturn.focus({ preventScroll: true });
+}
+buildGuide();
 document.addEventListener('click', (e) => {
-  const a = e.target.closest('[data-go]'); if (!a) return;
-  e.preventDefault();
-  const target = a.dataset.go;
-  if (route().name !== 'home') { pendingScroll = target; location.hash = '#/'; }
-  else document.getElementById(target).scrollIntoView();
+  if (e.target.closest('[data-open-list]')) { openGuide(); return; }
+  const gp = e.target.closest('[data-gplay]');
+  if (gp) { toggleTrack(ALL.find((t) => t.id === gp.dataset.gplay)); return; }
+  const sh = e.target.closest('[data-show]');
+  if (sh) {
+    const f = frames.find((x) => x.t.id === sh.dataset.show);
+    closeGuide();
+    if (!st.entered) enter(false);
+    openFocus(f);
+  }
 });
-let pendingScroll = null;
+$('#gClose').addEventListener('click', closeGuide);
+guide.addEventListener('click', (e) => { if (e.target === guide) closeGuide(); });
 
-// ---------- Router ----------
-function route() {
+// ---------- Keyboard ----------
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { if (!guide.hidden) closeGuide(); else closeFocus(); return; }
+  if (!st.entered || !guide.hidden || e.target.closest('input, textarea')) return;
+  const next = ['ArrowDown', 'ArrowRight', 'j', 'PageDown'].includes(e.key);
+  const prev = ['ArrowUp', 'ArrowLeft', 'k', 'PageUp'].includes(e.key);
+  if (next || prev) {
+    e.preventDefault();
+    const f = step(next ? 1 : -1);
+    if (st.focus) openFocus(f); else scrollToZ(viewZ(f), true);
+  } else if (e.key === 'Enter' && !st.focus && st.active && e.target === body) openFocus(st.active);
+});
+
+// ---------- Routes ----------
+function parse() {
   const [, a, n] = location.hash.replace(/^#\/?/, '#/').split('/');
   const artist = ARTISTS.find((x) => x.id === a);
-  if (artist && n) { const t = artist.tracks.find((x) => x.n === n); if (t) return { name: 'song', t }; }
-  if (artist) return { name: 'artist', artist };
-  return { name: 'home' };
+  const t = artist && n && artist.tracks.find((x) => x.n === n);
+  return { artist, t };
 }
-
-function show() {
-  const r = route();
-  ['home', 'artist', 'song'].forEach((v) => { $(`#${v}`).hidden = v !== r.name; });
-  if (r.name === 'artist') renderArtist(r.artist);
-  if (r.name === 'song') renderSong(r.t);
-  document.title = r.name === 'song' ? `${r.t.title} · ${r.t.artist.name} · Three Doors`
-    : r.name === 'artist' ? `${r.artist.name} · Three Doors` : 'Three Doors';
-  if (pendingScroll && r.name === 'home') { const id = pendingScroll; pendingScroll = null; requestAnimationFrame(() => document.getElementById(id).scrollIntoView()); }
-  else window.scrollTo(0, 0);
-  sync();
+function route() {
+  const { artist, t } = parse();
+  if (t) { openFocus(frameOf(t)); return; }
+  closeFocus();
+  if (artist) scrollToZ(plan.doors.find((d) => d.a === artist).z + 7, true);
+  else if (st.entered) scrollToZ(START, true);
 }
+addEventListener('hashchange', route);
 
-function renderArtist(a) {
-  $('#artistArch').innerHTML = `<img src="${esc(MASCOTS[a.id] || a.cover)}" alt="${esc(a.name)}'s animal: placeholder cat">`;
-  $('#artistAlbum').textContent = `Album · ${a.album} · ${a.tracks.length} songs`;
-  $('#artistName').textContent = a.name;
-  $('#artistBio').textContent = a.bio;
-  $('#artistMascot').textContent = a.mascot;
-  $('#artistGrid').innerHTML = a.tracks.map(card).join('');
+// ---------- Intro ----------
+let isReady = false;
+function ready() {
+  if (isReady) return; isReady = true;
+  intro.classList.add('ready');
+  $('#loader').textContent = 'The museum is open.';
 }
-
-function renderSong(t) {
-  const list = t.artist.tracks, i = list.indexOf(t);
-  const prev = list[(i - 1 + list.length) % list.length], next = list[(i + 1) % list.length];
-  $('#songBack').href = `#/${t.artist.id}`;
-  $('#songBack').textContent = `All ${t.artist.name} songs`;
-  $('#songFrame').innerHTML = pic(t, true);
-  $('#songLabel').innerHTML = label(t).replace('class="label"', 'class="label big"');
-  $('#songPlay').dataset.play = t.id;
-  $('#songStory').innerHTML = (t.story || []).map((l) => `<p>${esc(l)}</p>`).join('');
-  $('#songLyric').textContent = t.line || '';
-  $('#songLyric').hidden = !t.line;
-  $('#songPrev').href = songHref(prev); $('#songPrev').textContent = `← ${prev.title}`;
-  $('#songNext').href = songHref(next); $('#songNext').textContent = `${next.title} →`;
+setTimeout(ready, 8000);
+function enter(withSound) {
+  if (st.entered) return;
+  st.entered = true;
+  if (withSound) Sound.unlock();
+  intro.classList.add('out');
+  body.classList.remove('is-intro');
+  scrollTo(0, 0);
+  syncAudio();
+  setTimeout(() => { intro.hidden = true; }, 1300);
+  const { t, artist } = parse();
+  if (t) setTimeout(() => openFocus(frameOf(t)), 900);
+  else if (artist) setTimeout(() => scrollToZ(plan.doors.find((d) => d.a === artist).z + 7, true), 900);
 }
+$('#enterSound').addEventListener('click', () => enter(true));
+$('#enterQuiet').addEventListener('click', () => enter(false));
+$('.mark').addEventListener('click', (e) => { e.preventDefault(); closeFocus(); scrollToZ(START, true); });
 
-addEventListener('hashchange', show);
+// ---------- Frame loop ----------
+const clock = new THREE.Clock();
+let t0 = 0;
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05); t0 += dt;
+  const k = (s) => 1 - Math.exp(-dt * s);
+  const f = st.focus;
 
-// ---------- Player ----------
-// One preview at a time: from the track's start to its end, then it stops.
-const player = $('#player'), pBtn = $('#pBtn');
-let now = null, on = false, failed = false;
-
-function toggle(t) {
-  Sound.unlock();
-  if (now && now.id === t.id && on) { Sound.pause(); on = false; }
-  else {
-    if (!now || now.id !== t.id) { Sound.stop(200); failed = false; }
-    now = t; on = true; failed = false;
-    Sound.play(t);
-    $('#live').textContent = `Playing ${t.title} by ${t.artist.name}`;
+  // Where the body goes
+  let tx = 0, ty = EYE, tz;
+  if (f) {
+    const far = portrait();
+    tx = -f.side * (far ? 1.6 : .35); tz = f.z; ty = far ? 1.7 : EYE;
+    look.set(f.side * HW, FRAME_Y, f.z);
+  } else {
+    tz = st.entered ? targetZ() : START + 7;
   }
-  sync();
-}
+  const pz = camera.position.z;
+  camera.position.z = lerp(pz, tz, k(f ? 2.6 : RM ? 9 : 3.4));
+  st.vz = lerp(st.vz, Math.abs(camera.position.z - pz) / Math.max(dt, 1e-3), k(6));
+  st.phase += Math.abs(camera.position.z - pz) * 2.2;
+  const bob = RM || f ? 0 : Math.sin(st.phase) * .035 * clamp(st.vz / 3, 0, 1);
+  const sway = RM || f ? 0 : Math.sin(t0 * .4) * .08;
+  camera.position.x = lerp(camera.position.x, tx + sway, k(2.4));
+  camera.position.y = lerp(camera.position.y, ty + bob, k(5));
 
-Sound.onerror = (t) => {
-  if (!now || now.id !== t.id) return;
-  failed = true; on = false; sync();
-  $('#live').textContent = 'Audio not online yet.';
-};
+  // Which work is in front of you
+  if (!f && st.entered) {
+    const zAhead = camera.position.z - AHEAD;
+    let best = null, bd = 2.1;
+    frames.forEach((fr) => { const d = Math.abs(fr.z - zAhead); if (d < bd) { bd = d; best = fr; } });
+    if (best !== st.active) { st.active = best; onActive(best); }
+  }
+  const act = f || st.active;
+  st.activeW = lerp(st.activeW, act && !f ? 1 : 0, k(2));
 
-function sync() {
-  document.querySelectorAll('[data-play]').forEach((b) => {
-    const playing = on && now && b.dataset.play === now.id;
-    b.classList.toggle('playing', !!playing);
-    const t = b.querySelector('.t');
-    if (t) t.textContent = playing ? 'Pause' : 'Play a preview';
-    if (b.classList.contains('mini')) b.setAttribute('aria-label', `${playing ? 'Pause' : 'Play a preview of'} ${byId(b.dataset.play).title}`);
+  // Where the eyes go
+  if (!f) {
+    if (TOUCH || !mouse.moved) { mouse.x = Math.sin(t0 * .23) * .18; mouse.y = Math.sin(t0 * .17) * .1; }
+    else { mouse.x = lerp(mouse.x, mouse.nx, k(4)); mouse.y = lerp(mouse.y, mouse.ny, k(4)); }
+    const bias = st.active ? st.active.side * (portrait() ? .72 : .3) * st.activeW : 0;
+    const yaw = mouse.x * .42 + bias, pitch = -mouse.y * .16 - .02;
+    look.set(camera.position.x + Math.sin(yaw) * 6, camera.position.y + Math.sin(pitch) * 6, camera.position.z - Math.cos(yaw) * 6);
+  }
+  lookDummy.position.copy(camera.position); lookDummy.lookAt(look);
+  camera.quaternion.slerp(lookDummy.quaternion, k(f ? 3 : 5));
+
+  // Lens: wider on phones, shifted so the panel does not cover the work
+  const sx = f && !portrait() ? .21 : 0, sy = f && portrait() ? .27 : 0;
+  st.shift.x = lerp(st.shift.x, sx, k(3)); st.shift.y = lerp(st.shift.y, sy, k(3));
+  camera.fov = lerp(camera.fov, st.fov, k(4));
+  if (Math.abs(st.shift.x) + Math.abs(st.shift.y) > .001) {
+    const w = innerWidth, h = innerHeight;
+    camera.setViewOffset(w, h, st.shift.x * w, st.shift.y * h, w, h);
+  } else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+
+  // Hover
+  let hov = null;
+  if (st.entered && !f && !TOUCH && mouse.moved && guide.hidden) hov = pick(mouse.cx, mouse.cy);
+  if (hov !== st.hover) {
+    st.hover = hov;
+    cursor.classList.toggle('look', !!hov); peek.classList.toggle('on', !!hov);
+    if (hov) { $('#peekK').textContent = `No. ${hov.t.n} · ${hov.t.artist.name}`; $('#peekT').textContent = hov.t.title; }
+  }
+  if (!TOUCH) {
+    cursor.style.transform = `translate3d(${mouse.cx}px,${mouse.cy}px,0)`;
+    const px = clamp(mouse.cx + 46, 8, innerWidth - 290), py = clamp(mouse.cy + 30, 8, innerHeight - 110);
+    peek.style.transform = `translate3d(${px}px,${py}px,0)`;
+  }
+
+  // Glow: the work in front of you, the one under the cursor, the one up close
+  const lvl = Sound.level ? Sound.level() : 0;
+  frames.forEach((fr) => {
+    const on = fr === act || fr === hov ? 1 : 0;
+    fr.glow = lerp(fr.glow, on, k(on ? 3 : 1.6));
+    const pulse = fr === audio.t && audio.playing ? lvl * .25 : 0;
+    fr.pm.emissiveIntensity = .14 + fr.glow * .78 + pulse;
+    fr.matM.emissiveIntensity = .025 + fr.glow * .22;
+    fr.lm.emissiveIntensity = .18 + fr.glow * .7;
+    fr.hm.opacity = .1 + fr.glow * .55 + pulse;
+    fr.fm.opacity = .05 + fr.glow * .32;
   });
-  document.querySelectorAll('.card').forEach((c) => c.classList.toggle('now', !!(now && c.dataset.id === now.id)));
-  if (!now) { player.hidden = true; return; }
-  player.hidden = false;
-  $('#pThumb').src = now.meme;
-  $('#pTitle').textContent = now.title;
-  $('#pArtist').textContent = failed ? 'Audio not online yet' : `${now.artist.name} · preview`;
-  pBtn.classList.toggle('on', on);
-  pBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
+  if (act) {
+    frameLight.position.set(act.side * 1.6, 2.6, act.z);
+    frameLight.intensity = lerp(frameLight.intensity, 9 + lvl * 6, k(3));
+  } else frameLight.intensity = lerp(frameLight.intensity, 0, k(3));
+
+  // Door light: the nearest arch ahead
+  let dz = null;
+  plan.doors.forEach((d) => { if (d.z < camera.position.z + 2 && (dz === null || d.z > dz)) dz = d.z; });
+  if (dz !== null) doorLight.position.set(0, 2.6, dz - 2.4);
+
+  // Flashlight follows the cursor
+  flash.position.copy(camera.position); flash.position.y -= .15;
+  ray.setFromCamera({ x: f ? 0 : mouse.x * .9, y: f ? 0 : -mouse.y * .9 }, camera);
+  const hit = ray.intersectObjects(solids, false)[0];
+  if (hit) flashTarget.position.lerp(hit.point, k(8));
+  flash.intensity = (f ? 35 : 80) + lvl * 60;
+
+  // Ticker drifts
+  if (!RM) tickers.forEach((tk) => { tk.t.offset.x = (t0 * .045) % 1; });
+
+  // HUD
+  if (st.entered) {
+    setRoom(camera.position.z);
+    if (scrollY > 40) hint.classList.add('gone');
+    exitEl.classList.toggle('on', !f && camera.position.z < plan.endZ + 5);
+  }
+  if (audio.playing && audio.t) {
+    const p = (Sound.time() - audio.t.start) / (audio.t.end - audio.t.start);
+    nowP.style.width = `${clamp(p, 0, 1) * 100}%`;
+    if (p >= 1) { Sound.stop(900); audio.playing = false; audio.done = true; syncAudio(); }
+  }
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
 }
 
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-play]'); if (!b) return;
-  e.preventDefault();
-  toggle(byId(b.dataset.play));
-});
-pBtn.addEventListener('click', () => now && toggle(now));
-$('#pClose').addEventListener('click', () => { Sound.stop(300); now = null; on = false; sync(); });
+// Wait for the fonts before drawing canvas text, then build the label textures.
+// (Textures above were drawn with fallback fonts if the fonts were slow; redraw them once they arrive.)
+Promise.all([
+  document.fonts.load(`400 100px Newsreader`), document.fonts.load(`italic 400 100px Newsreader`), document.fonts.load(`500 40px Geist`)
+]).catch(() => {}).finally(() => { scrollTo(0, 0); requestAnimationFrame(frame); });
 
-setInterval(() => {
-  if (!now || !on) return;
-  const k = (Sound.time() - now.start) / (now.end - now.start);
-  $('#pProg').style.width = `${Math.max(0, Math.min(1, k)) * 100}%`;
-  if (k >= 1) { Sound.stop(600); on = false; sync(); }
-}, 250);
-
-show();
+window.__museum = { plan, frames, st, camera, openFocus, closeFocus, enter, scrollToZ, viewZ };

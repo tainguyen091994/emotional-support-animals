@@ -2,151 +2,126 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Three Doors</title>
-<meta name="description" content="Ceralie, Julius Wren and halfsaid. Three AI artists. Sad songs, calm animals.">
+<meta name="description" content="A museum of sad songs and calm animals. Ceralie, Julius Wren and halfsaid: three AI artists, nineteen works, three rooms.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Three Doors">
-<meta property="og:description" content="Three AI artists. Sad songs, calm animals.">
+<meta property="og:description" content="A museum of sad songs and calm animals.">
 <meta property="og:image" content="https://tainguyen091994.github.io/three-doors/share.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#f1efe9">
+<meta name="theme-color" content="#0b0a09">
 <link rel="preload" href="fonts/Newsreader-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Newsreader-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=3">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }</script>
 </head>
-<body>
-<a class="skip" href="#main">Skip to content</a>
+<body class="is-intro">
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div id="track" aria-hidden="true"></div>
 
-<header class="bar">
+<!-- Intro -->
+<section class="intro" id="intro" aria-labelledby="introTitle">
+  <div class="intro-in">
+    <p class="kicker">Est. 2026 · Admission free</p>
+    <h1 id="introTitle"><span class="w">Three</span> <span class="w"><em>Doors</em></span></h1>
+    <p class="intro-sub">A museum of sad songs and calm animals.<br>Nineteen works in three rooms. Please do not tap the glass.</p>
+    <p class="loader" id="loader" aria-live="polite">Hanging frames <b id="loadN">0</b>/<span id="loadT">22</span></p>
+    <div class="intro-row" id="enterRow">
+      <button class="btn-y" id="enterSound" type="button">Enter with sound</button>
+      <button class="btn-ghost" id="enterQuiet" type="button">Enter quietly</button>
+    </div>
+    <p class="intro-foot">Headphones help. Scroll to walk. <button class="txt" type="button" data-open-list>Read the gallery guide instead</button></p>
+  </div>
+</section>
+
+<!-- HUD -->
+<header class="hud-top">
   <a class="mark" href="#/">Three Doors</a>
-  <nav aria-label="Main">
-    <a href="#/" data-go="wall">Songs</a>
-    <a href="#/" data-go="doors">Artists</a>
-    <a href="#/" data-go="how">How it works</a>
-  </nav>
+  <div class="hud-actions">
+    <button class="chip" id="soundBtn" type="button" aria-pressed="false"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span class="lbl">Sound off</span></button>
+    <button class="chip" type="button" data-open-list>Gallery guide</button>
+  </div>
 </header>
 
-<main id="main">
-  <!-- Home -->
-  <div class="view" id="home">
-    <section class="hero wrap" aria-labelledby="heroTitle">
-      <div class="hero-text">
-        <p class="kicker">Now on the wall</p>
-        <h1 id="heroTitle">Sad songs,<br>calm animals.</h1>
-        <p class="lede">Three AI artists. Nineteen songs about small, heavy things. Each one hangs here with a meme and a label.</p>
-        <div class="row">
-          <button class="btn-play" id="heroPlay" type="button"><span class="ic" aria-hidden="true"></span><span class="t">Play a preview</span></button>
-          <a class="link" href="#/" data-go="wall" id="seeAll">See all 19 songs</a>
-        </div>
-      </div>
-      <figure class="frame hero-frame" id="heroFrame"></figure>
-    </section>
-
-    <section class="band" id="doors" aria-labelledby="doorsTitle">
-      <div class="wrap">
-        <header class="sec-head">
-          <p class="kicker">Gallery 1</p>
-          <h2 id="doorsTitle">Three doors</h2>
-          <p class="sec-sub">One artist behind each. Each artist has one animal. The animal does not know it is sad.</p>
-        </header>
-        <div class="doors" id="doorList"></div>
-      </div>
-    </section>
-
-    <section class="wrap" id="wall" aria-labelledby="wallTitle">
-      <header class="sec-head">
-        <p class="kicker">Gallery 2</p>
-        <h2 id="wallTitle">The wall</h2>
-        <p class="sec-sub">Every song, in the order we would play them. Click a frame to read the story.</p>
-      </header>
-      <div class="chips" role="group" aria-label="Filter by artist" id="chips"></div>
-      <ol class="grid" id="grid"></ol>
-    </section>
-
-    <section class="band" id="how" aria-labelledby="howTitle">
-      <div class="wrap">
-        <header class="sec-head">
-          <p class="kicker">Notes</p>
-          <h2 id="howTitle">How it works</h2>
-        </header>
-        <ol class="steps">
-          <li><span class="num">01</span><h3>A person writes the story</h3><p>Each song starts from one true-feeling scene: a stamp, a pan, a pencil line on a door.</p></li>
-          <li><span class="num">02</span><h3>An AI voice sings it</h3><p>The voices are made with AI. A person listens to the takes and keeps one.</p></li>
-          <li><span class="num">03</span><h3>The animal holds the object</h3><p>Each meme shows the artist's animal holding the thing the song is about. It looks calm about it.</p></li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="listen" id="listen" aria-labelledby="listenTitle">
-      <div class="wrap listen-in">
-        <h2 id="listenTitle">Listen somewhere else</h2>
-        <ul class="platforms">
-          <li><a href="#" aria-disabled="true">Spotify <small>[link needed]</small></a></li>
-          <li><a href="#" aria-disabled="true">Apple Music <small>[link needed]</small></a></li>
-          <li><a href="#" aria-disabled="true">YouTube <small>[link needed]</small></a></li>
-          <li><a href="#" aria-disabled="true">TikTok <small>[link needed]</small></a></li>
-        </ul>
-      </div>
-    </section>
-  </div>
-
-  <!-- Artist page -->
-  <div class="view" id="artist" hidden>
-    <section class="wrap artist-head">
-      <a class="link back" href="#/">All artists</a>
-      <div class="artist-top">
-        <figure class="arch" id="artistArch"></figure>
-        <div>
-          <p class="kicker" id="artistAlbum"></p>
-          <h1 id="artistName"></h1>
-          <p class="lede" id="artistBio"></p>
-          <p class="mascot" id="artistMascot"></p>
-        </div>
-      </div>
-    </section>
-    <section class="wrap"><ol class="grid" id="artistGrid"></ol></section>
-  </div>
-
-  <!-- Song page -->
-  <div class="view" id="song" hidden>
-    <article class="wrap song">
-      <a class="link back" id="songBack" href="#/">Back</a>
-      <div class="song-top">
-        <figure class="frame song-frame" id="songFrame"></figure>
-        <div class="song-side">
-          <div class="label big" id="songLabel"></div>
-          <div class="row"><button class="btn-play" id="songPlay" type="button"><span class="ic" aria-hidden="true"></span><span class="t">Play a preview</span></button></div>
-          <div class="walltext" id="songStory"></div>
-          <blockquote class="lyric" id="songLyric"></blockquote>
-        </div>
-      </div>
-      <nav class="pager" aria-label="Other songs"><a class="link" id="songPrev"></a><a class="link" id="songNext"></a></nav>
-    </article>
-  </div>
-</main>
-
-<footer class="foot">
-  <div class="wrap foot-in">
-    <p><strong>AI artists.</strong> A person writes every story and picks every take.</p>
-    <p class="muted">Placeholder cats from <a href="https://cataas.com">cataas.com</a> until the real thumbnails arrive.</p>
-  </div>
-</footer>
-
-<div class="player" id="player" hidden>
-  <img id="pThumb" alt="">
-  <div class="p-meta"><b id="pTitle"></b><span id="pArtist"></span><div class="p-bar"><i id="pProg"></i></div></div>
-  <button class="p-btn" id="pBtn" type="button" aria-label="Pause"></button>
-  <button class="p-x" id="pClose" type="button" aria-label="Close player">×</button>
+<div class="hud-bottom">
+  <div class="room" id="room" aria-live="polite"><span class="room-n" id="roomN">Entrance</span><span class="room-t" id="roomT">Sad songs, calm animals.</span></div>
+  <p class="hint" id="hint"><span class="mouse" aria-hidden="true"></span>Scroll to walk</p>
+  <nav class="map" id="map" aria-label="Floor plan"></nav>
 </div>
+
+<div class="now" id="now" hidden><span class="dot" aria-hidden="true"></span><span id="nowT"></span><i class="now-bar"><b id="nowP"></b></i></div>
+
+<div class="peek" id="peek" aria-hidden="true">
+  <span class="peek-k" id="peekK"></span>
+  <span class="peek-t" id="peekT"></span>
+  <span class="peek-a">Click to look closer</span>
+</div>
+
+<div class="cursor" id="cursor" aria-hidden="true"><span>Look</span></div>
+
+<!-- Focus panel: one work up close -->
+<aside class="focus" id="focus" aria-labelledby="fTitle" hidden>
+  <p class="kicker" id="fKick"></p>
+  <h2 id="fTitle"></h2>
+  <p class="f-feel" id="fFeel"></p>
+  <div class="f-story" id="fStory"></div>
+  <blockquote class="f-lyric" id="fLyric"></blockquote>
+  <div class="f-row">
+    <button class="btn-y" id="fPlay" type="button"><span class="ic" aria-hidden="true"></span><span class="t">Play a preview</span></button>
+    <span class="f-err" id="fErr" hidden>Audio not online yet.</span>
+  </div>
+  <nav class="f-nav">
+    <button class="txt" id="fPrev" type="button">← Previous work</button>
+    <button class="txt" id="fNext" type="button">Next work →</button>
+  </nav>
+  <button class="f-close" id="fClose" type="button" aria-label="Back to walking (Esc)">Back to walking <kbd>Esc</kbd></button>
+</aside>
+
+<!-- End of the walk -->
+<section class="exit" id="exit" aria-labelledby="exitTitle">
+  <h2 id="exitTitle">Exit through the playlist.</h2>
+  <ul class="platforms">
+    <li><a href="#" aria-disabled="true">Spotify <small>[link needed]</small></a></li>
+    <li><a href="#" aria-disabled="true">Apple Music <small>[link needed]</small></a></li>
+    <li><a href="#" aria-disabled="true">YouTube <small>[link needed]</small></a></li>
+    <li><a href="#" aria-disabled="true">TikTok <small>[link needed]</small></a></li>
+  </ul>
+  <p class="exit-note">AI artists. A person writes every story and picks every take. · Placeholder cats from <a href="https://cataas.com">cataas.com</a>.</p>
+</section>
+
+<!-- Gallery guide: the whole museum as a plain page (keyboard, screen readers, no WebGL) -->
+<div class="guide" id="guide" role="dialog" aria-modal="true" aria-labelledby="gTitle" hidden>
+  <div class="guide-in">
+    <header class="g-head">
+      <div><p class="g-k">Gallery guide · printed on recycled paper</p><h2 id="gTitle">Three Doors</h2></div>
+      <button class="g-close" id="gClose" type="button">Close guide</button>
+    </header>
+    <p class="g-lede">Three AI artists. Nineteen songs about small, heavy things. Each song hangs as a meme with a label. The animals are calm. The songs are not.</p>
+    <div id="gRooms"></div>
+    <section class="g-notes">
+      <h3>Notes on the collection</h3>
+      <ol>
+        <li><b>A person writes the story.</b> Each song starts from one scene: a stamp, a pan, a pencil line on a door.</li>
+        <li><b>An AI voice sings it.</b> The voices are made with AI. A person listens to the takes and keeps one.</li>
+        <li><b>The animal holds the object.</b> Each meme shows the artist's animal with the thing the song is about. It looks calm about it.</li>
+      </ol>
+    </section>
+    <p class="g-foot">AI artists. A person writes every story and picks every take. Placeholder cats from cataas.com until the real thumbnails arrive.</p>
+  </div>
+</div>
+
 <div class="sr" aria-live="polite" id="live"></div>
 
-<script src="sound.js?v=5"></script>
+<script src="sound.js?v=6"></script>
 <script src="tracks.js?v=5"></script>
 <script src="stories.js?v=5"></script>
 <script src="memes.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script type="module" src="app.js?v=3"></script>
 </body>
 </html>

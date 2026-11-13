@@ -1,6 +1,6 @@
 # Three Doors
 
-A showcase site for three artists: Ceralie, Julius Wren and halfsaid. The look is a gallery wall: each song hangs as a meme thumbnail with a museum label. Direction board: `docs/three-doors_board_meme-rebuild_20261113.md`.
+A showcase site for three artists: Ceralie, Julius Wren and halfsaid. The site is a walk-in museum built with Three.js. Scroll walks you down a dark corridor. Each artist has one room behind an arch, and each song hangs as a framed meme with a museum label. Direction board: `docs/three-doors_board_meme-rebuild_20261113.md`.
 
 ## Run it
 
@@ -8,9 +8,9 @@ A showcase site for three artists: Ceralie, Julius Wren and halfsaid. The look i
 2. Open `site/` in the browser, for example `http://localhost:8765/<path>/site/`.
 3. After any edit, bump `?v=N` on every asset in `site/index.html`. The browser caches old scripts.
 
-Routes: `#/` home (hero, three doors, the wall, how it works), `#/<artist>` artist page, `#/<artist>/<nn>` song page. Artist ids: `ceralie`, `julius`, `halfsaid`.
+Routes: `#/` entrance, `#/<artist>` walks to that artist's arch, `#/<artist>/<nn>` opens one work up close. Artist ids: `ceralie`, `julius`, `halfsaid`.
 
-Files: `index.html`, `style.css`, `app.js` (pages and player), `sound.js` (audio), `tracks.js`, `stories.js`, `memes.js`.
+Files: `index.html`, `style.css`, `app.js` (the 3D museum, focus panel, guide and player), `sound.js` (audio), `tracks.js`, `stories.js`, `memes.js`.
 
 ## Swap the placeholder cats
 
@@ -21,7 +21,9 @@ The thumbnails are placeholder cats from cataas.com. To use the real memes:
 3. Put the mascot portraits (4:5) in the same folder and update `window.MASCOTS`.
 4. Bump `?v=` on `memes.js` in `index.html`.
 
-The platform links in the "Listen somewhere else" band still say [link needed]. Edit them in `index.html`.
+The platform links in the "Listen somewhere else" band still say [link needed]. Edit them in the exit section of `index.html`.
+
+Without WebGL, the site opens the gallery guide: the same museum as a plain list. The guide also serves keyboard and screen-reader users.
 
 ## Deploy
 
