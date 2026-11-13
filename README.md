@@ -1,6 +1,6 @@
-# Three Doors
+# Emotional Support Animals
 
-A showcase site for three artists: Ceralie, Julius Wren and halfsaid. Each song opens with a short story scene. Then the music swells in.
+A showcase site for three artists: Ceralie, Julius Wren and halfsaid. The site is a walk-in museum built with Three.js. Scroll walks you down a dark corridor. Each artist has one room behind a giant reaction meme that tears in half as you walk up. Each song hangs as a meme with TOP TEXT and BOTTOM TEXT. The repo and the Pages path still say three-doors. Direction board: `docs/three-doors_board_meme-rebuild_20261113.md`.
 
 ## Run it
 
@@ -8,9 +8,22 @@ A showcase site for three artists: Ceralie, Julius Wren and halfsaid. Each song 
 2. Open `site/` in the browser, for example `http://localhost:8765/<path>/site/`.
 3. After any edit, bump `?v=N` on every asset in `site/index.html`. The browser caches old scripts.
 
-Routes: `#/` doors, `#/<artist>` room, `#/<artist>/<nn>` song scene. Artist ids: `ceralie`, `julius`, `halfsaid`.
+Routes: `#/` entrance, `#/<artist>` walks to that artist's arch, `#/<artist>/<nn>` opens one work up close. Artist ids: `ceralie`, `julius`, `halfsaid`.
 
-Scene media: the site tries `site/assets/scenes/<id>.mp4`, then `<id>.jpg`, then the old loop, then the album cover. `<id>` looks like `halfsaid-03`.
+Files: `index.html`, `style.css`, `app.js` (the 3D museum, focus panel, guide and player), `sound.js` (audio), `tracks.js`, `stories.js`, `memes.js`.
+
+## Swap the placeholder cats
+
+The thumbnails are placeholder cats from cataas.com. To use the real memes:
+
+1. Put each image in `site/assets/memes/`, named by track id, for example `halfsaid-06.jpg`. Use 16:9.
+2. In `site/memes.js`, change each URL to the local path, for example `'halfsaid-06': 'assets/memes/halfsaid-06.jpg'`.
+3. Put the mascot portraits (4:5) in the same folder and update `window.MASCOTS`.
+4. Bump `?v=` on `memes.js` in `index.html`.
+
+The platform links in the "Listen somewhere else" band still say [link needed]. Edit them in the exit section of `index.html`.
+
+Without WebGL, the site opens the gallery guide: the same museum as a plain list. The guide also serves keyboard and screen-reader users.
 
 ## Deploy
 
