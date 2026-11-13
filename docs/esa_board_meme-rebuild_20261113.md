@@ -2,7 +2,7 @@
 
 Date: 2026-11-13. New songs ship with meme thumbnails: one calm animal, no text, cut-out collage look. The first rebuild hung them on a light gallery wall. Tai found it too plain, so version 2 turns the site into a museum you walk through.
 
-Version 4 renames the site. "Three Doors" said nothing about the jokes, so the museum is now Emotional Support Animals (ESA in tight spaces). The repo and the Pages path still say three-doors.
+Version 4 renames the site. "Three Doors" said nothing about the jokes, so the museum is now Emotional Support Animals (ESA in tight spaces). The repo and the Pages path moved to emotional-support-animals on 2026-11-13.
 
 The point in one line: the memes hang like art in a dark museum, and a straight-faced label does the talking.
 
