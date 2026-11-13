@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tainguyen091994.github.io/three-doors/sitemap.xml
+Sitemap: https://tainguyen091994.github.io/emotional-support-animals/sitemap.xml
